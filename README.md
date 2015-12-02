@@ -20,6 +20,7 @@ Following modules are need to be installed
 * GD
 * DBI
 * Graph
+
 ### Changes and bug fixes
 * PPI data integration
 * First version stable: June 12, 2015
