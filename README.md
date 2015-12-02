@@ -27,5 +27,28 @@ Following modules are need to be installed
 * Wed, Dec 02, 2015  2:41:40 PM : Broadspectrum analysis, BLAST known target_databases added;
 
 
+##Futures supported/proposed
+- [ ] Single project should contain all outputs
+  - [x] Import all inputs to create a single project
+  - [x] All outputs in the same project
+  - [ ] Import a runned project to rerun a uncomplete task
+- [x] Putative Bactrial Drug targets
+ - [x] Single-copy genes (CD-hit) + Non-host proteins(BLAST) + Essntial proteins (BLAST vs DEG)
+ - [x] Single-copy genes (CD-hit) + Non-host proteins (BLAST) + Hub genes via Protein-protein interaction analysis (STRING)
+- [ ] Downstream annotation of Targets.
+ - [x] Broadspectrum analysis
+ - [x] Compare against Known target databases
+ - [ ] Ontology prediction
+ - [ ] Pathway prediction
+ - [ ] Sub-cellular localization prediction
+- [ ] Utility to create inputs
+ - [ ] create PPI networks from STRING dataset
+ - [ ] Create Drug traget database
+ - [ ] create Broadspectrum analysis database
+- [ ] Create help doc
+ - [x] MS Word Documnet
+ - [ ] PDF Doc
+ - [ ] HTML version
+
 
 
