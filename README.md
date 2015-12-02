@@ -10,16 +10,19 @@ These proteins could thus act as potential targets for drugs acting against the 
 ##Citation
 
 ## PERL implementation
-
+Active perl is used to develop the tool. 
+###System requirements
+Currently supports only Windows XP/7/8.
 
 ###Dependacies
-
 Following modules are need to be installed
 * Tkx
 * GD
 * DBI
 * Graph
+### Changes and bug fixes
+* PPI data integration
+* First version stable: June 12, 2015
 
-##System requirements
-Currently supports only Windows XP/7/8.
+
 
