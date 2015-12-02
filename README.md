@@ -32,7 +32,10 @@ Following modules are need to be installed
   - [x] Import all inputs to create a single project
   - [x] All outputs in the same project
   - [ ] Import a runned project to rerun a uncomplete task
-- [ ] Downstream analysis are indepepent of Project inputs.
+- [x] Putative Bactrial Drug targets
+ - [x] Single-copy genes (CD-hit) + Non-host proteins(BLAST) + Essntial proteins (BLAST vs DEG)
+ - [x] Single-copy genes (CD-hit) + Non-host proteins (BLAST) + Hub genes via Protein-protein interaction analysis (STRING)
+- [ ] Downstream annotation of Targets.
  - [x] Broadspectrum analysis
  - [x] Compare against Known target databases
  - [ ] Ontology prediction
