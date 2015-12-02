@@ -48,7 +48,7 @@ our $project_name="New_Project";
 our $root_path=	get_my_document_path();		#getcwd();##update later
 $root_path=~s/\//\\\\/g;					##Win formated
 #our $prog_install_path=getcwd();			
-our $L_root_path = get_my_document_path();	## keeping an extra variable; storing path in Unix format
+our $L_root_path = get_my_document_path('L');	## keeping an extra variable; storing path in Unix format
 our $installation_path=getcwd();			##dont update; essential data files and folders;
 #$installation_path=~s/\//\\\\/g;
 our $last_update="25 June 2015";
@@ -1321,9 +1321,9 @@ my $run_but=shift;
 			}
 			$sequence_summary{-broad_spectrum}=scalar @filter_ids;
 			Tkx::tk___messageBox(-message => "$sequence_summary{-broad_spectrum} queries filtered!!!\nNow click 'Save results' to save sequences."); 
-			my $r=fetch_seq_by_id(\$input_seq,\@filter_ids);	##
+			my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),\@filter_ids);	##
 			write_fasta_seq($r,"$L_root_path/accepted_seq_step-5.fasta");
-			my $r=fetch_seq_by_id(\$input_seq,\@not_filter_ids);	##
+			my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),\@not_filter_ids);	##
 			write_fasta_seq($r,"$L_root_path/excluded_seq_step-5.fasta");
 			#$$drug_bank_blast_but->configure(-state=>"normal");
 			$$save_result_butn->configure(-state=>"normal");
@@ -1440,7 +1440,7 @@ sub comp_known_DT
 				}	##wait till blast4.out.txt is available
 				$blast_prg4=100;  Tkx::update();
 				
-				my($known_drug_targets,$novel_drug_targets)=process_host_blast_out("$input_seq","$L_root_path/drug_target_blast4.out.txt" );
+				my($known_drug_targets,$novel_drug_targets)=process_host_blast_out(unix_path($input_seq),"$L_root_path/drug_target_blast4.out.txt",0);
 				
 				my @all_known_drug_targets=keys %{$drug_target_annot};
 				my ($not_identified_drugTarget,$identified_drugTarget,$identified_novel_drugTarget)=(scalar@all_known_drug_targets-scalar@$known_drug_targets,scalar@$known_drug_targets,scalar@$novel_drug_targets);
@@ -1460,13 +1460,13 @@ sub comp_known_DT
 				$Save_Known_targets_predicted_but->configure(-state=>"normal",-command=>sub{
 					my $save_result = Tkx::tk___getSaveFile();
 					#$crt_win->g_raise();
-					my $r=fetch_seq_by_id(\$input_seq,$known_drug_targets);	##
+					my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),$known_drug_targets);	##
 					write_fasta_seq($r,"$save_result") if $save_result ;
 				});
 				$Save_novel_targets_predicted_but->configure(-state=>"normal",-command=>sub{
 					my $save_result = Tkx::tk___getSaveFile();
 					#$crt_win->g_raise();
-					my $r=fetch_seq_by_id(\$input_seq,$novel_drug_targets);	##
+					my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),$novel_drug_targets);	##
 					write_fasta_seq($r,"$save_result") if $save_result ;;
 				});
 				$Save_known_targets_predicted_tsv_but->configure(-state=>"normal",-command=>sub{
@@ -2123,7 +2123,7 @@ sub process_host_blast_out
 {
 	my $input_seq=shift;
 	my $file=shift;	##blast_out
-	my $perc_identity=shift | 0;
+	my $perc_identity=shift || 0;
 	
 	my (@blast_hits,@non_blast_hits);
 	open (P, "<$file") or die "$! $file";
@@ -2136,7 +2136,7 @@ sub process_host_blast_out
 	@blast_hits= keys %a;
 	
 	my @b;
-	open (P,"<$input_seq") or die "$!$input_seq";
+	open (P,$input_seq) or die "$!  88 $input_seq";
 	while(<P>){
 	if(/^>(\S+)/){my $t=$1; $t=~s/\|/\\|/g;  if(!(grep{/^$t$/}@blast_hits)){ $t=~s/\\\|/|/g; push @non_blast_hits,$t; }      }
 	#else{}
@@ -2246,20 +2246,27 @@ return \%h;
 
 
 
-##Args: none
-##returns: path of My Documents; OS specific; windows; 'echo %USERPROFILE%'
+##Args: optionally 'L'/'W': default is windows format
+##returns: path of My Documents\Desktop; OS specific; windows; 'echo %USERPROFILE%'
 sub get_my_document_path
 {
-
+my $os=shift || 'W';
 my $p=`echo %USERPROFILE%`;
 chomp($p);
 $p.='\Desktop';		##in users desktop;
-return $p;
-
+if(uc($os) eq 'L'){$p=~s/\\/\//g; return $p;}
+else{return $p;}
 }
 
-
-
-
+##Args: Win formated path; STRING ("C:\\Users\\SGPGI.SGPGI-PC\\KANHU\\EDIT\\Prev_data";)
+##returns: Unix formated path string (C:/Users/SGPGI.SGPGI-PC/KANHU/EDIT/Prev_data)
+sub unix_path
+{
+	my $p = shift;
+	$p=~s/\\/\//g;		## \\ to /
+	$p=~s/\s/\\ /g;		## replace spaces to \ 
+	$p=~s/"//g;			## remove ""
+	return $p;			##
+}
 
 Tkx::MainLoop();
