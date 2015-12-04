@@ -25,7 +25,7 @@ Following modules are need to be installed
 * PPI data integration
 * First version stable: June 12, 2015
 * Wed, Dec 02, 2015  2:41:40 PM : Broadspectrum analysis, BLAST known target_databases added;
-
+* Fri, Dec 04, 2015  4:20:21 PM : File path problem solved; Param seting s for Downstream anal added;
 
 ##Futures supported/proposed
 - [ ] Single project should contain all outputs
