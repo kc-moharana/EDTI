@@ -26,7 +26,6 @@ print STDERR "
 
  This program is free software: you can redistribute it and/or modify
  it under the same terms as Perl itself. See (http://dev.perl.org/licenses/).
-
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -91,24 +90,20 @@ our $min_aa_len=50; #after translations
 #our $min_ntd_len=100;
 our $cd_hit_identity=60;
 our $chk_cdhit=1;
-#print STDERR "Reading drug Target data:";
-our $drug_db_names="";				#read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
+print STDERR "Reading drug Target data:";
+our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
 our $ref_drug_db_array=[];
-#open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
-our $drug_blast_db_names=" ";	#create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-our $drug_target_annot="";	#read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-
-#print STDERR "DONE";
-
-
+open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
+our $drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+our $drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+print STDERR "DONE";
 our $enable_broad_spe=1;			##decrypted
-
-#print STDERR "\nReading broad-spectrum data:";
-our $broad_spectrum_pathogen_db_list="";	#	create_broad_spe_db_array("$installation_path/local_dat/broad_spectrum_db_list.txt","$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
+print STDERR "\nReading broad-spectrum data:";
+our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array("$installation_path/local_dat/broad_spectrum_db_list.txt","$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
 ##'"\"COMPLETE_PTM_PATHPGENS\" "COMPLETE_PTM_PATHPGENS\ACIBC" "COMPLETE_PTM_PATHPGENS\ACIBS" "COMPLETE_PTM_PATHPGENS\ACIBT" "COMPLETE_PTM_PATHPGENS\BURM1\""';##read files to update it;
 our $broad_spe_species_per_query=0;
-our $broad_spe_org_code_full_name= ""; #read_broad_spe_codes("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
-#print STDERR "DONE\n";
+our $broad_spe_org_code_full_name=read_broad_spe_codes("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
+print STDERR "DONE\n";
 
 our $database = $installation_path."\\local_dat\\PPI\\PPI_sqlite3.db";
 	$database =~s/\//\\/g;
@@ -255,7 +250,7 @@ $settings->add_command(-label => "Open settings",-underline=>1, -command =>\&set
 $settings->add_command(-label => "Down-stream analysis",-underline=>1, -command =>\&down_str_anal);
 $settings->add_command(-label => "Executable files path",-underline=>1, -command => \&executable_paths);
 
-$dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>1, -command =>sub {});
+$dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>1, -command =>sub {});	## functions updated later
 $dwn_str_anal->add_command(-label =>"Compare with known targets", -underline=>1, -command =>sub {});
 $dwn_str_anal->add_command(-label =>"GO analysis",-underline=>1, -command =>sub {});
 $dwn_str_anal->add_command(-label =>"Sub-cellular localization",-underline=>1, -command =>sub {});
@@ -291,8 +286,8 @@ $run_but->g_grid(-column=>0, -row=>0,-sticky=>"e");
 
 
 my $save_options_but=$frnt_bottom->new_button(-text=>"Save options to file",-width=>18, -state=>"disabled",-command=>sub{
- my $filter_param_save_file=$L_root_path."/Parameters.txt";
- open (P, ">$filter_param_save_file") or die "$!";
+my $filter_param_save_file=$L_root_path."/Parameters.txt";
+open (P, ">$filter_param_save_file") or die "$!";
 
  print P "
 CPU =  $use_cores
@@ -341,9 +336,7 @@ PPI_THR = $PPI_score_cutoff
 TOP_HUB_PERC = $top_hub_perc
  
  ";
- 
-  
- Tkx::tk___messageBox(-message => "Parameters used in the current analysis \nwere saved to $L_root_path/Parameters.txt");
+Tkx::tk___messageBox(-message => "Parameters used in the current analysis \nwere saved to $L_root_path/Parameters.txt");
  close P;
  });
 $save_options_but->g_grid(-column=>2, -row=>0,-sticky=>"e", -padx=>10);
@@ -353,25 +346,8 @@ $dwn_str_anal->entryconfigure("Compare with known targets", -command =>sub{ $frn
 
 Tkx::update();
 
-#determine inputs aa or nucleotide;
-#convert to aa if nucleotide.
-#remove aa sequences or (translated aa seq) < user defined length (50)
-#two files:
-#	1. final list of sequences;
-#	2. removed sequences_1
-#if CD-hit enabled: perform cd-hit at user defined threshold (60%) remove sequences orthologs to each other;removed sequences_2
-#cd-hit -i input/input.fasta -o output/cdhit_$th.fasta -c $th -n 3
-#process *.clstr file to find non-orthologous sequences;remove orthologous sequences: removed sequences_3
-#perorm blastp of non-orthologous sequences against human proteome; those found homologous removed: removed sequences_4
-
-##Perform blastP again non-othologue non-huaman homolog sequences agans essential bacterial proteome with e-cal 10e-10: 
-#bit score >100;
-=blast cmdline options
-To access a BLAST database containing spaces under Microsoft Windows it is necessary to use two sets of double-quotes, escaping the innermost quotes with a backslash. For example, Users\joeuser\My Documents\Downloads would be accessed by:
-
-blastdbcmd -db "\"Users\joeuser\My Documents\Downloads\mydb\"" -info
-=cut
-
+##Args: ref of front panel Frams, ref of Run button, ref of an global variable to store ref of all seq data;
+##Returns: nothing
 sub main_script
 {
 	my $frm=shift;
@@ -429,15 +405,6 @@ sub main_script
 	my $entry_non_host_proteome=$frm_right->new_ttk__entry(-width=>5);
 	$entry_non_host_proteome->g_grid(-column=>1,-row=>5,-padx=>8,-pady=>1,-sticky=>"w");
 	
-	
-	
-#	$frm_right->new_ttk__label(-text=>"5. Number of sequences non-homologous to \nessential proteins				:")->g_grid(-column=>0,-row=>5,-padx=>1,-pady=>1,-sticky=>"w");
-#	my $entry_non_ess_seq=$frm_right->new_ttk__entry(-width=>5);
-#	$entry_non_ess_seq->g_grid(-column=>1,-row=>5,-padx=>0,-pady=>1,-sticky=>"w");
-#	$frm_right->new_ttk__label(-text=>"6. Number of putative drug targets		:")->g_grid(-column=>0,-row=>6,-padx=>1,-pady=>1,-sticky=>"w");
-#	my $entry_drug_cand_seq=$frm_right->new_ttk__entry(-width=>5);
-#	$entry_drug_cand_seq->g_grid(-column=>1,-row=>6,-padx=>0,-pady=>1,-sticky=>"w");
-	
 	#########################################################################################
 	##just givng a space between two sections
 	$frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 80,-padding => "20 0 10 0")->g_grid(-column=>0,-row=>2,-sticky=>"nswe",-pady=>2 );
@@ -451,18 +418,6 @@ sub main_script
 	
 	$p2->add($frm_seq_app);
 	$p2->add($frm_ppi_app);
-	###########################COMENT 12-jun-15
-	#my $p3 = $frm_top->new_ttk__panedwindow(-orient => 'horizontal');
-	#$p3->g_grid(-column=>0,-row=>3,-sticky=>"nwse",-pady=>3 );
-	#my $frm_brd = $p3->new_ttk__labelframe(-text => "Downstream analysis", -width => 635, -height => 195);
-	#$p3->add($frm_brd );
-	###########################COMENT 12-jun-15
-	
-	#my $canvas = $frm_brd->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>600, -height=>200);
-	###########################COMENT 12-jun-15
-	#my $filter_broad_spe_but=$frm_brd->new_button(-text=>"Apply filter",-width=>10, -state=>"disabled");
-	##########my $search_drugBank_but=$frm_brd->new_button(-text=>"BLAST against DrugBank",-width=>20, -state=>"disabled");
-	#my $save_result_but=$frm_brd->new_button(-text=>"Save results",-width=>10, -state=>"disabled");
 	
 	my $entry_drug_cand_seq_app=$frm_seq_app->new_ttk__entry(-width=>5);
 	my $prg_blast_ess_homolog=$frm_seq_app->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$blast_prg2);
@@ -498,42 +453,6 @@ sub main_script
 	
 	$$run_button->configure(-state=>"disabled");
 	
-	
-	#$canvas->g_grid(-column=>0, -row=>0, -padx=>5, -pady=>5,-sticky=>"nw",-columnspan=>4);
-	#my $hscroll = $frm_brd->new_tk__scrollbar(-orient => "horizontal", -command => [$canvas, "xview"]);
-	#my $vscroll = $frm_brd->new_tk__scrollbar(-orient => "vertical", -command => [$canvas, "yview"]);
-	#$hscroll->g_grid(-column => 0, -row => 1, -sticky => "we",-columnspan=>4);
-	#$vscroll->g_grid(-column => 4, -row => 0, -sticky => "ns");
-	#$frm_brd->new_ttk__sizegrip()->g_grid(-column => 4, -row => 1, -sticky => "se");
-	#$canvas->configure(-yscrollcommand => [$vscroll, "set"], -xscrollcommand => [$hscroll, "set"]);
-	
-	###########################COMENT 12-jun-15
-	#$frm_brd->new_ttk__label(-text=>"Broad-spectrum analysis:")->g_grid(-column=>0,-row=>1,-padx=>1,-pady=>1,-sticky=>"w");
-	#my $prg_blast_brd_sp=$frm_brd->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$blast_prg3);
-	#$prg_blast_brd_sp->g_grid(-column=>1,-row=>1,-padx=>3,-pady=>1,-sticky=>"w");
-	#$frm_brd->new_ttk__label(-text=>"Minimum no. of conserved species:")->g_grid(-column=>0,-row=>2,-padx=>1,-pady=>1,-sticky=>"w");
-	#$frm_brd->new_ttk__entry(-width=>5,-textvariable=>\$broad_spe_species_per_query)->g_grid(-column=>1,-row=>2,-padx=>1,-pady=>1,-sticky=>"w");
-	
-	#$filter_broad_spe_but->g_grid(-column=>2, -row=>2,-padx=>2,-pady=>1,-sticky=>"e");
-	#$search_drugBank_but->g_grid(-column=>3, -row=>2,-padx=>0,-pady=>2,-sticky=>"se");
-	#$save_result_but->g_grid(-column=>3, -row=>2,-padx=>2,-pady=>2,-sticky=>"e");
-	
-	
-	#$frm_brd->new_ttk__label(-text=>"Compare with known drug-target databases:")->g_grid(-column=>0,-row=>3,-padx=>1,-pady=>5,-sticky=>"ws");
-	#my $prg_blast_drgBank_homolog=$frm_brd->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$blast_prg4);
-	#my $canvas = $frm_brd->new_tk__canvas(-width=>300, -height=>150);
-	#my $Save_known_targets_predicted=$frm_brd->new_button(-text=>"Export known targets",-width=>25, -state=>"disabled");
-	#my $Save_novel_targets_predicted=$frm_brd->new_button(-text=>"Export novel targets",-width=>25, -state=>"disabled");
-	#my $Save_known_targets_predicted_tsv=$frm_brd->new_button(-text=>"Export known targets as table",-width=>25, -state=>"disabled");
-	#$canvas->g_grid(-row=>4,-column=>0,-sticky=>"wn",-rowspan=>4);
-	#$prg_blast_drgBank_homolog->g_grid(-column=>1,-row=>3,-padx=>1,-pady=>5,-sticky=>"ws");
-	#$Save_known_targets_predicted->g_grid(-row=>4,-column=>2,-sticky=>"e",-columnspan=>3);
-	#$Save_novel_targets_predicted->g_grid(-row=>5,-column=>2,-sticky=>"e",-padx=>1,-columnspan=>3);
-	#$Save_known_targets_predicted_tsv->g_grid(-row=>6,-column=>2,-columnspan=>3,-sticky=>"e",-padx=>1,);
-	###########################COMENT 12-jun-15
-	
-	
-	
 	###########################################################
 	###MAIN script goes here								  #
 	###########################################################
@@ -555,16 +474,13 @@ sub main_script
 	close A1;
 	$entry_short_seq->delete(0, "end"); $entry_short_seq->insert(0, $sequence_summary{-very_short_seq}) ;
 	$remove_short_seq_prg=100;Tkx::update();
-	
-	
+
 	$cdhit_path=~ s{/}{\\}g; $cdhit_path='"'.$cdhit_path.'"';
 
 	if($chk_cdhit)
 		{
 			my $cdHit_c=$cd_hit_identity/100;
-			#print qq($cdhit_path -i $root_path/accepted_seq_step-1.fasta -o $root_path/cdHit_out -d 0-c $cdHit_c -n 3\n);
-			#system qq($cdhit_path -i $root_path/accepted_seq_step-1.fasta -o $root_path/cdHit_out -d 0-c $cdHit_c -n 3);
-=i			
+
 			unlink "$L_root_path/cdHit_out.clstr.txt";		
 			#`$cdhit_path -i $root_path/accepted_seq_step-1.fasta -o $root_path/cdHit_out -d 0 -c $cdHit_c -n 3`;
 			`echo echo off > batch.bat`;
@@ -584,7 +500,6 @@ sub main_script
 			`echo rename $root_path\\cdHit_out.clstr cdHit_out.clstr.txt >> batch.bat`;	##mv works
 			`echo exit >> batch.bat`;
 			system("start batch.bat ");
-=cut			
 			
 			while(!(-e "$L_root_path/cdHit_out.clstr.txt")){Tkx::update(); sleep(1); $cdhit_prg=25;}	##wait till cdHit_out.clstr.txt is available
 			
@@ -609,7 +524,7 @@ sub main_script
 		
 	$blast_path=~ s{/}{\\}g; $blast_path='"'.$blast_path.'"';
 	$Hproteome_file=~ s{/}{\\}g;  $Hproteome_file='"\"'.$Hproteome_file.'\""';
-=i
+
 	unlink "$L_root_path/host_orthologs_blast1.out.txt";
 	my($gap_open, $gap_extns)=split /,/,$gap_score_1;
 	my $blast1="$blast_path -p blastp -d $Hproteome_file -i $root_path\\accepted_seq_step-2.fasta -e $e_val_1 -m $out_fmt_1 -W $word_size_1 -M $sub_matrix_1 -G $gap_open -E $gap_extns -o $root_path\\host_orthologs_blast1.out -a $use_cores -f $threshold_1"." $extra_params_BLAST1";
@@ -637,20 +552,17 @@ sub main_script
 			`echo rename $root_path\\host_orthologs_blast1.out host_orthologs_blast1.out.txt >> batch.bat`;	##mv works
 			`echo exit >> batch.bat`;
 			system("start batch.bat ");
-=cut			
+
 	while(!(-e "$L_root_path/host_orthologs_blast1.out.txt")){
 			##wait till human_orthologs_blast1.out.txt is available
-			#print "$blast_prg1  $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})--\n";
 		$blast_prg1=blast_progress("$root_path\\host_orthologs_blast1.out","$L_root_path/host_orthologs_blast1.out",$sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})); 
 		$blast_prg1= 90 if $blast_prg1>90;
 		sleep(3);Tkx::update(); 
 	}	
-			
-
 	$blast_prg1=100;Tkx::update();
+	
 	my ($host_like_proteins,$not_host_like_proteins)=process_host_blast_out("$L_root_path/accepted_seq_step-2.fasta","$L_root_path/host_orthologs_blast1.out.txt", $perc_identity_1 );
 	$sequence_summary{-host_orthologs}=scalar @$host_like_proteins;
-			
 			
 	my $non_host_seq_id=fetch_seq_by_id($all_t_seq,$not_host_like_proteins);
 	write_fasta_seq($non_host_seq_id,"$L_root_path/accepted_seq_step-3.fasta");
@@ -664,7 +576,6 @@ sub main_script
 	Tkx::tk___messageBox(-message => "Select an target prediction approach\nPerform either 'Sequence-based approach'  or 'PPI network-based approach' ");
 ###do_PPI_search	
 	$do_PPI_search->configure(-command=>sub{
-		
 			if(!$PPI_id_map_file){
 				Tkx::tk___messageBox(-type => "ok",
 					-message => "Probably you forgot to load STRING mapping file.\n",
@@ -722,8 +633,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 .import \"$interactome_file\" PPI";
 			print S "$bat";
 			close S;
-			
-			
+
 			open(S,">batch.bat") or die "$!";
 			print S "echo off \n";
 			print S "color B0  \n";
@@ -742,7 +652,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			system("start batch.bat ");
 			while(-e "import.sql"){	$string_srch_prg=5;Tkx::update();sleep(1);	}
 			$string_srch_prg=35;Tkx::update();
-=i			
+
 			my $g = Graph::Undirected->new(); # An undirected graph.
 			my $driver   = "SQLite";
 			my $dsn = "DBI:$driver:dbname=$database";
@@ -771,22 +681,12 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			while(my @row = $sth->fetchrow_array()) {
 				$g->add_edge($row[0],$row[1]);			
 			}
-			
-			
-			
-			
+		##Calculating nodes		
 			$string_srch_prg=40;Tkx::update();
 			my @V = $g->vertices;		## nodes in array
 			my $V = scalar @V;			##$g->vertices;		## network sizr (n)
 			my $gd = $g->diameter;		#diamemter
 			
-			##Here hangs
-			#my $prg_grph_cc =$mw->new_toplevel();
-			#$prg_grph_cc->g_wm_title("Calculating centrality measures");
-			#$mw->configure(-cursor=>"watch");
-			#$mw->g_raise($prg_grph_cc);
-			#$prg_grph_cc->new_ttk__label(-text=>"Calculating centrality measures\nWindows may freez for sometime. Please wait...")->g_grid(-column=>0,-row=>0,-padx=>1,-pady=>1,-sticky=>"w");
-			#$prg_grph_cc->new_ttk__progressbar(-orient => 'horizontal', -length => 120, -mode => 'indeterminate')->g_grid(-column => 0, -row => 1, -padx => 10, -pady => 10);
 			open (K,">all_node.txt") or die "$!";
 			$"="\n";
 			print K "@V\n";
@@ -935,8 +835,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			}
 			$dbh->disconnect();
 			$string_srch_prg=60;Tkx::update();
-			#normalize
-			#sort and mapp
+			#normalize hub data, sort and mapp
 			foreach my $n(keys %centrality_scores_per_node)		##$n=PPI id
 			{
 			my $tot_relative_centrality_score=0;
@@ -986,11 +885,11 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 						
 			close N;
 			
-=cut		### IMPORTANT:  commnet the following one lines of code while DELETING cut	;just hacking to add shotcut @filtered_id;
+#=cut		### IMPORTANT:  commnet the following one lines of code while DELETING cut	;just hacking to add shotcut @filtered_id;
 			
-			my @sorted_filterd_ids = @{ids_in_fasta_seq("$L_root_path/accepted_seq_step-3.fasta")}; ## remove category
-			my (@ids_with_CC,@filtered_id,@not_filtered_id);		## remove category
-			@ids_with_CC = keys(%{process_centrality_measure_file("$L_root_path/Centrality_measures.txt")}); ## remove category
+			#my @sorted_filterd_ids = @{ids_in_fasta_seq("$L_root_path/accepted_seq_step-3.fasta")}; ## remove category
+			#my (@ids_with_CC,@filtered_id,@not_filtered_id);		## remove category
+			#@ids_with_CC = keys(%{process_centrality_measure_file("$L_root_path/Centrality_measures.txt")}); ## remove category
 			
 			
 			my $filt=int (($top_hub_perc/100)*($#ids_with_CC+1));				
@@ -1008,7 +907,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			$string_srch_prg=90;Tkx::update();
 			$entry_drug_cand_ppi_app->delete(0, "end"); $entry_drug_cand_ppi_app->insert(0, $sequence_summary{-putative_drug_targets}) ;
 
-=i			
+		##Export SIF file cytoscape visualization
 			open (SIF, ">$L_root_path/filtered_hub_genes.SIF") or die "$!";
 			foreach my $seq_id(@filtered_id){
 				my $i = $g->connected_component_by_vertex($seq_id_to_PPI_id_map{$seq_id});	#return an index identifying the connected component the vertex belongs to
@@ -1016,7 +915,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				foreach (@Connected_v ) {print SIF "$seq_id\t$PPI_id_to_seq_id_map{$_}\n";}
 			}
 			close SIF;
-=cut			
+
 			sleep(1);	
 			$string_srch_prg=100;Tkx::update();
 			$save_result->configure(-state=>"normal");				
@@ -1047,7 +946,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			$do_PPI_search->configure(-state=>"disabled");
 			$do_ess_pro_blast->configure(-state=>"disabled");
 			$Eproteome_file=~ s{/}{\\}g;   $Eproteome_file='"\"'.$Eproteome_file.'"\"';
-=i 
+
 			unlink "$L_root_path/essential_protein_blast2.out.txt";
 			my($gap_open, $gap_extns)=split /,/,$gap_score_2;
 			my $blast2="$blast_path -p blastp -d $Eproteome_file -i $root_path\\accepted_seq_step-3.fasta -e $e_val_2 -m $out_fmt_2 -W $word_size_2 -M $sub_matrix_2 -G $gap_open -E $gap_extns -o $root_path\\essential_protein_blast2.out -f $threshold_2 -a $use_cores"." $extra_params_BLAST2";
@@ -1074,7 +973,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				`echo rename $root_path\\essential_protein_blast2.out essential_protein_blast2.out.txt >> batch.bat`;	##mv works
 				`echo exit >> batch.bat`;
 				system("start batch.bat ");
-=cut		
+
 				while(!(-e "$L_root_path/essential_protein_blast2.out.txt")){
 				#print "$blast_prg2  $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})--\n";
 				my $t=$sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous}+$sequence_summary{-host_orthologs});
@@ -1141,10 +1040,11 @@ sub broad_spect_run
 	my $heading = $frm_top->new_ttk__label(-text=>"Exogeneous Drug Target Identification Tool",-justify=>"center",-foreground=>"blue",-font => "Helvetica 16 bold underline");
 	$heading->g_grid(-column=>0,-row=>0,-sticky=>"s",-padx=>50);
 	
+	$frm_top->new_ttk__label(-text=>"BROAD-SPECTRUM TARGET ANALYSIS",-justify=>"left",-foreground=>"darkgreen",-font => "Helvetica 12")->g_grid(-column=>0,-row=>1,-sticky=>"s",-padx=>0);
 	
 	my ($input_seq,$brd_blast_db); 		##
 	$input_seq = ($Tproteome_file?"$L_root_path/accepted_seq_step-4_1.fasta":"");
-	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "0 0 0 0");
+	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "10 50 0 0");
 	$new_frm->g_grid(-column=>0,-row=>2,-sticky=>"nswe");
 	
 	$new_frm->new_ttk__label(-text=>"Input target sequences")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
@@ -1162,11 +1062,6 @@ sub broad_spect_run
 	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
 	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
 	
-	#$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	#$brd_blast_db = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();
-	#})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();
 	
@@ -1174,9 +1069,6 @@ sub broad_spect_run
 	$L_root_path=$root_path;													##preserve UNIX format
 	$root_path=~ s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");	
-	
-	$broad_spectrum_pathogen_db_list=create_broad_spe_db_array("$installation_path/local_dat/broad_spectrum_db_list.txt","$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
-	
 	
 	my $canvas = $new_frm->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>400, -height=>200);
 	$canvas->g_grid(-column=>1, -row=>5, -padx=>5, -pady=>5,-sticky=>"nw",-columnspan=>4);
@@ -1197,9 +1089,6 @@ sub broad_spect_run
 	$filter_broad_spe_but->g_grid(-column=>2, -row=>8,-padx=>2,-pady=>1,-sticky=>"w");
 	my $save_result_but=$new_frm->new_button(-text=>"Save results",-width=>10, -state=>"disabled");
 	$save_result_but->g_grid(-column=>3, -row=>8,-padx=>2,-pady=>2,-sticky=>"e");
-	
-	#my $search_drugBank_but=$new_frm->new_button(-text=>"BLAST against DrugBank",-width=>20, -state=>"disabled");
-	#$search_drugBank_but->g_grid(-column=>1, -row=>9,-padx=>0,-pady=>2,-sticky=>"se");
 	
 
 	$$run_button->configure(-state=>"normal", -command =>sub
@@ -1241,9 +1130,9 @@ sub broad_spect_run
 		$blast_prg3=100;  Tkx::update();
 		my $ref_broad_spec_counts=process_broad_spe_BLAST_out("$L_root_path/broad_spe_blast3.out.txt",$broad_spe_BLAST_cutoff); 				##\%hash
 		my %broad_spec_counts;					##stores counts per query;; should be GLOBAL??
-	foreach my $a( keys %$ref_broad_spec_counts ){
-		$broad_spec_counts{$a}=scalar @{$ref_broad_spec_counts->{$a}};
-	}
+		foreach my $a( keys %$ref_broad_spec_counts ){
+			$broad_spec_counts{$a}=scalar @{$ref_broad_spec_counts->{$a}};
+		}
 		my (@query_id,@cons_counts,@bar_dclrs);
 		my $total_hits=0;
 		foreach my $t(sort { $broad_spec_counts{$b} <=> $broad_spec_counts{$a} } keys %broad_spec_counts ){
@@ -1289,9 +1178,6 @@ sub broad_spect_run
 			print IMG $gd->gif;
 			close IMG;
 		
-#=cut		
-		 
-	  
 	  Tkx::image_create_photo( "BROAD_SPE", -file => "$img_broad_spec");
 	  $canvas->create_image(400, 0, -image=>"BROAD_SPE", -anchor =>'n' );
 	  
@@ -1329,150 +1215,10 @@ sub broad_spect_run
 	
 }	## END BROAD spect
 
-
-sub do_broard_spectrum_ana
-{
-#\$canvas,\$filter_broad_spe_but,\$save_result_but,$input_seq,$run_button
-my $canvas=shift;
-my $filter_broad_spe_but=shift;
-my $save_result_butn=shift;
-my $input_seq=shift;
-my $run_but=shift;
-#my $Save_known_targets_predicted=shift;
-#my $Save_novel_targets_predicted=shift;
-#my $Save_known_targets_predicted_tsv=shift;
-
-	$$run_but->configure(-state=>"disabled");
-	unlink "$L_root_path/broad_spe_blast3.out.txt" if (-e "$L_root_path/broad_spe_blast3.out.txt");
-	my($gap_open, $gap_extns)=split /,/,$gap_score_3;
-	my $blast3="$blast_path -p blastp -d $broad_spectrum_pathogen_db_list -i $input_seq -e $e_val_3 -m $out_fmt_3 -W $word_size_3 -M $sub_matrix_3 -G $gap_open -E $gap_extns -o $root_path\\broad_spe_blast3.out -a $use_cores -f $threshold_3"." $extra_params_BLAST3";
-		`echo echo off > batch.bat`;
-		`echo color 90 >> batch.bat`;
-		`echo cls >> batch.bat`;
-		`echo echo :: External program Blastall.exe :: >> batch.bat`;
-		`echo echo ---------------------------------------------- >> batch.bat`;
-		
-			`echo echo Parameters >> batch.bat`;
-			`echo echo 	Program: blastp >> batch.bat`;
-			`echo echo 	Query		: $input_seq >> batch.bat`;
-			`echo echo 	Database	: broad_spectrum_pathogen_db_list (see locale_dat dir.) >> batch.bat`;
-			`echo echo 	E-value	: $e_val_3 >> batch.bat`;
-			`echo echo 	Scoring matrix: $sub_matrix_3 >> batch.bat`;
-			`echo echo 	Gap-penalty (Open,Extension): $gap_open,$gap_extns >> batch.bat`;
-			`echo echo 	Word size : $word_size_3 >> batch.bat`;
-			`echo echo 	Threshold for extending hits : $threshold_3 >> batch.bat`;
-			`echo echo 	CPUs : $use_cores >> batch.bat`;
-			
-		
-		`echo echo Please wait.......... >> batch.bat`;
-		`echo $blast3 >> batch.bat`;
-		`echo rename $root_path\\broad_spe_blast3.out broad_spe_blast3.out.txt >> batch.bat`;	##mv works
-		`echo exit >> batch.bat`;
-		system("start batch.bat ");
-		$blast_prg3=0;
-		while(!(-e "$L_root_path/broad_spe_blast3.out.txt")){
-		
-		$blast_prg3=blast_progress("$root_path\\broad_spe_blast3.out","$L_root_path/broad_spe_blast3.out",$sequence_summary{-putative_drug_targets}*10 ); ##as this blast is not with one hit per one query, so miscalculation happens, so multipled 10,  10 hits per query
-		$blast_prg3=96 if $blast_prg3>96;		##fail safe
-		sleep(3);Tkx::update(); 
-		}										##wait till essential_protein_blast2.out.txt is available
-		$blast_prg3=100;  Tkx::update();
-		my $ref_broad_spec_counts=process_broad_spe_BLAST_out("$L_root_path/broad_spe_blast3.out.txt",$broad_spe_BLAST_cutoff); 				##\%hash
-		my %broad_spec_counts;					##stores counts per query;; should be GLOBAL??
-	foreach my $a( keys %$ref_broad_spec_counts ){
-		$broad_spec_counts{$a}=scalar @{$ref_broad_spec_counts->{$a}};
-	}
-		my (@query_id,@cons_counts,@bar_dclrs);
-		my $total_hits=0;
-		foreach my $t(sort { $broad_spec_counts{$b} <=> $broad_spec_counts{$a} } keys %broad_spec_counts ){
-		#print "ids: $t".$broad_spe_org_code_full_name->{$t}."\n";
-			push (@query_id,$t);
-			push (@cons_counts,$broad_spec_counts{$t});
-			push @bar_dclrs,'black';
-		}
-		
-		$sequence_summary{-broad_spectrum}=scalar @query_id;	##update later on applying filter
-		
-		if(!(scalar @query_id)){ Tkx::tk___messageBox(-message => "None of the queries are conserved in any of the species"); return();}
-		
-		my $tot_cons_count=0; my @cons_counts_perc; my $max_cons=-1;
-		foreach(@cons_counts){ my $x=$_;$max_cons=($x>$max_cons?$x:$max_cons); $tot_cons_count+=$x;}
-		#print "max : $max_cons\n";
-		#foreach my $i(0.. scalar@cons_counts-1){$cons_counts_perc[$i]=($cons_counts[$i]/$tot_cons_count)*100;}
-		my @data=(\@query_id,\@cons_counts);
-		my($img_width,$img_height)=(1000, 600);
-		my $graph = GD::Graph::bars->new(800, 400);
-		$graph->set( 
-			x_label           => 'Putative drug targets',
-			y_label           => 'Conserved in # of species',
-			title             => 'Broadspectrum analysis',
-			y_max_value       => $max_cons+5,
-			#y_tick_number     => 8,
-			#y_label_skip      => 2,
-			bar_width			=>20,
-			bar_spacing			=>0,
-			x_labels_vertical	=>1,
-			transparent			=>0,
-			accentclr		=> 'black',
-			#boxclr			=> 'gray',
-			axislabelclr		=>'black',
-			dclrs 				=>\@bar_dclrs,
-		) or die $graph->error;
-		my $gd = $graph->plot(\@data,correct_width => 0) or die $graph->error;
-		my $img_broad_spec;
-		
-			$img_broad_spec="$L_root_path/broad_spec.gif";
-			open(IMG, ">$img_broad_spec") or die $!;
-			binmode IMG;
-			print IMG $gd->gif;
-			close IMG;
-		
-#=cut		
-		 
-	  
-	  Tkx::image_create_photo( "BROAD_SPE", -file => "$img_broad_spec");
-	  $$canvas->create_image(400, 0, -image=>"BROAD_SPE", -anchor =>'n' );
-	  
-	  $$filter_broad_spe_but->configure(-state=>"normal");
-	  my(@filter_ids,@not_filter_ids);
-	  $$filter_broad_spe_but->configure(-command=>sub{
-			undef @filter_ids; undef @not_filter_ids;
-			$$save_result_butn->configure(-state=>"disabled");
-			#$$drug_bank_blast_but->configure(-state=>"disabled");
-			foreach my $t(sort keys %broad_spec_counts ){
-				if($broad_spec_counts{$t}>=$broad_spe_species_per_query){push (@filter_ids,$t);}
-				else{push (@not_filter_ids,$t); 
-				}
-			}
-			$sequence_summary{-broad_spectrum}=scalar @filter_ids;
-			Tkx::tk___messageBox(-message => "$sequence_summary{-broad_spectrum} queries filtered!!!\nNow click 'Save results' to save sequences."); 
-			my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),\@filter_ids);	##
-			write_fasta_seq($r,"$L_root_path/accepted_seq_step-5.fasta");
-			my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),\@not_filter_ids);	##
-			write_fasta_seq($r,"$L_root_path/excluded_seq_step-5.fasta");
-			#$$drug_bank_blast_but->configure(-state=>"normal");
-			$$save_result_butn->configure(-state=>"normal");
-			
-			
-				$$save_result_butn->configure(-command=>sub{
-				my $save_result = Tkx::tk___getSaveFile();
-				my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),\@filter_ids);	##
-				write_fasta_seq($r,"$save_result") if $save_result;
-				});
-		
-		});
-
-		
-	Tkx::tk___messageBox(-message => "Run complete.\nChoose minimum number of conserved species and Click on Apply button."); 	
-}
-
 sub comp_known_DT
 {
 	my $frm=shift;
-	my $run_button = shift;;	
-	
-	
-	
+	my $run_button = shift;	
 	my $frm_top=$$frm->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 500,-padding => "0 0 0 0");
 	$frm_top->g_grid(-column=>0,-row=>0,-sticky=>"nswe");
 		
@@ -1480,12 +1226,12 @@ sub comp_known_DT
 	($frm_top->new_ttk__label(-image=>'BANER'))->g_grid(-column=>0, -row=>0,-sticky=>"nwes",-columnspan=>2, -padx=>60);	
 	my $heading = $frm_top->new_ttk__label(-text=>"Exogeneous Drug Target Identification Tool",-justify=>"center",-foreground=>"blue",-font => "Helvetica 16 bold underline");
 	$heading->g_grid(-column=>0,-row=>0,-sticky=>"s",-padx=>50);
-	
+	$frm_top->new_ttk__label(-text=>"COMPARE TARGETS WITH KNOWN DRUG-TARGETS",-justify=>"left",-foreground=>"darkgreen",-font => "Helvetica 12")->g_grid(-column=>0,-row=>1,-sticky=>"s",-padx=>0);
 	
 	my $input_seq;
 	$input_seq = ($Tproteome_file?"$L_root_path/accepted_seq_step-4_1.fasta":"");	##Skipp if project defined;
 		
-	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "0 0 0 0");
+	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "0 0 50 0");
 	$new_frm->g_grid(-column=>0,-row=>2,-sticky=>"nswe");
 	
 	$new_frm->new_ttk__label(-text=>"Input target sequences")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
@@ -1501,14 +1247,6 @@ sub comp_known_DT
 	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
 	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
 	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	$drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");	#' {All} {drugBank} {PTTD} ';	##read files to update it;
-	$ref_drug_db_array=[];
-	open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
-		
-	$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-	
-	$drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
@@ -1776,40 +1514,7 @@ sub settings
 	
 		view_update_blast_params ("BLASTp with host proteome parameters", \$crt_win, "$root_path\\accepted_seq_step-3.fasta", $Eproteome_file, \$e_val_2, \$out_fmt_2, \$word_size_2, \$sub_matrix_2, \$gap_score_2, \$threshold_2,\$perc_identity_2,\$extra_params_BLAST2);
 	},)->g_grid(-column=>1,-row=>5,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
-	
-	#$frm1->new_ttk__label(-text=>"BLAST settings for broad-spectrum analysis:",)->g_grid(-column=>0,-row=>6,-padx=>2,-pady=>5,-sticky=>"nw");	
-	#$frm1->new_button(-text=>"Change/view",-width=>10,-command=>sub{
-	#	view_update_blast_params ("BLASTp broad-spectrum analysis", \$crt_win, "$root_path\\accepted_seq_step-4_1.fasta", "broad-spectrum database", \$e_val_3, \$out_fmt_3, \$word_size_3, \$sub_matrix_3, \$gap_score_3, \$threshold_3,\$perc_identity_3,\$extra_params_BLAST3);	
-	#},)->g_grid(-column=>1,-row=>6,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
-	
-	
-	
-	#my $broad_spe_BLAST_identity=$frm1->new_ttk__entry(-textvariable => \$perc_identity_3, -width=>3,-state=>"normal",)->g_grid(-column=>1,-row=>7,-padx=>2,-pady=>5,-sticky=>"nw");	;
-	
-	#$frm1->new_ttk__label(-text=>"BLAST identity threshold for broad-spectrum analysis(%):",)->g_grid(-column=>0,-row=>7,-padx=>2,-pady=>5,-sticky=>"nw");	
-	#$broad_spe_BLAST_identity->g_grid(-column=>1,-row=>7,-padx=>2,-pady=>5,-sticky=>"nw");	
-	
-	#$frm1->new_ttk__label(-text=>"Select known drug target database(s)",)->g_grid(-column=>0,-row=>9,-padx=>2,-pady=>0,-sticky=>"sw");	
-	#$frm1->new_ttk__label(-text=>"(use Ctrl or Select button to select multiple databases)",)->g_grid(-column=>0,-row=>10,-padx=>2,-pady=>0,-sticky=>"n");	
-	my $lbox=$frm1->new_tk__listbox(-height =>4,-listvariable => \$drug_db_names,-selectmode=>'extended');
-	#$lbox->g_grid(-column=>1,-row=>8,-padx=>2,-pady=>5,-rowspan => 4,-columnspan=>3, -sticky => "nsew");	##-selectmode=>'browse'
-	my $sel_drug_tar_db;
-	$lbox->selection_set(0,scalar@$ref_drug_db_array);
-	$lbox->g_bind("<<ListboxSelect>>", sub {
-			my @idx = $lbox->curselection;
-			$sel_drug_tar_db=join(",",@idx);
-			$ref_drug_db_array=\@idx;
-			$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-	
-		});
-	#$frm1->new_ttk__label(-text=>"BLAST settings against drug-target database:",)->g_grid(-column=>0,-row=>13,-padx=>2,-pady=>5,-sticky=>"nw");	
-	#$frm1->new_button(-text=>"Change/view",-width=>10,-command=>sub{
-	#	view_update_blast_params ("BLASTp against drug-target database", \$crt_win, "$root_path\\accepted_seq_step-5.fasta", $sel_drug_tar_db, \$e_val_4, \$out_fmt_4, \$word_size_4, \$sub_matrix_4, \$gap_score_4, \$threshold_4,\$perc_identity_4,\$extra_params_BLAST4);	
-	
-	#},)->g_grid(-column=>1,-row=>13,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
-	
-	
-	
+		
 	$frm1->new_ttk__label(-text=>"Number of processors use for BLAST searches:")->g_grid(-column=>0,-row=>15,-padx=>2,-pady=>5,-sticky=>"nw");
 	$frm1->new_ttk__combobox(-textvariable => \$use_cores, -values=>$CPU_list,-width=>5)->g_grid(-column=>1,-row=>15,-padx=>2,-pady=>5,-sticky=>"nw");
 	
@@ -1976,29 +1681,57 @@ sub view_update_blast_params
 
 }
 
+
+##Args:
+##return:
 sub down_str_anal
 {
 
 	my $crt_win =$mw->new_toplevel();
-	$crt_win->g_wm_title("Down-stream analysis (NOT FUNCTIONAL)");
+	$crt_win->g_wm_title("Down-stream analysis Settings");
 	#$mw->configure(-cursor=>"watch");
 	
 	$crt_win->g_raise();
 	$crt_win->g_wm_attributes (-topmost=>1);
 	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
 	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
-		
-	$frm1->new_ttk__checkbutton(-text => "Perform broad-spectrum analysis", -state=>"disabled", -command => sub {Tkx::update();},-variable => \$brd_spec_chk, -onvalue => 1, -offvalue =>0)->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__checkbutton(-text => "BLAST search against known drug-targets", -state=>"disabled", -command => sub {Tkx::update();},-variable => \$drg_tar_blast_chk, -onvalue => 1, -offvalue =>0)->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__checkbutton(-text => "Perform KEGG pathway mapping (requires unirpt ids)", -state=>"disabled",-command => sub {Tkx::update();},-variable => \$KEGG_chk, -onvalue => 1, -offvalue =>0)->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__checkbutton(-text => "Perform sub-cellular localization search(requires unirpt ids)", -state=>"disabled",-command => sub {Tkx::update();},-variable => \$sub_cel_loc_chk, -onvalue => 1, -offvalue =>0)->g_grid(-column=>0,-row=>4,-padx=>2,-pady=>5,-sticky=>"nw");
+	
+	$frm1->new_ttk__label(-text=>"BLAST settings for broad-spectrum analysis:",)->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");	
+	$frm1->new_button(-text=>"Change/view",-width=>10,-command=>sub{
+		view_update_blast_params ("BLASTp broad-spectrum analysis", \$crt_win, "Input fasta file", "broad-spectrum database", \$e_val_3, \$out_fmt_3, \$word_size_3, \$sub_matrix_3, \$gap_score_3, \$threshold_3,\$perc_identity_3,\$extra_params_BLAST3);	
+	},)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
+	
+	
+	$frm1->new_ttk__label(-text=>"BLAST identity threshold for broad-spectrum analysis(%):",)->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");	
+	my $broad_spe_BLAST_identity=$frm1->new_ttk__entry(-textvariable => \$perc_identity_3, -width=>3,-state=>"normal",);
+	$broad_spe_BLAST_identity->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");	
+	
+	$frm1->new_ttk__label(-text=>"Select known drug target database(s)",)->g_grid(-column=>0,-row=>4,-padx=>2,-pady=>0,-sticky=>"sw");	
+	$frm1->new_ttk__label(-text=>"(use Ctrl or Select button to select multiple databases)",)->g_grid(-column=>0,-row=>6,-padx=>2,-pady=>0,-sticky=>"n");	
+	my $lbox=$frm1->new_tk__listbox(-height =>4,-listvariable => \$drug_db_names,-selectmode=>'extended');
+	$lbox->g_grid(-column=>1,-row=>4,-padx=>2,-pady=>5,-rowspan => 4,-columnspan=>3, -sticky => "nsew");	##-selectmode=>'browse'
+	my $sel_drug_tar_db;
+	$lbox->selection_set(0,scalar@$ref_drug_db_array);
+	$lbox->g_bind("<<ListboxSelect>>", sub {
+			my @idx = $lbox->curselection;
+			$sel_drug_tar_db=join(",",@idx);
+			$ref_drug_db_array=\@idx;
+			$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+	
+		});
+	$frm1->new_ttk__label(-text=>"BLAST settings against drug-target database:",)->g_grid(-column=>0,-row=>10,-padx=>2,-pady=>5,-sticky=>"nw");	
+	$frm1->new_button(-text=>"Change/view",-width=>10,-command=>sub{
+		view_update_blast_params ("BLASTp against drug-target database", \$crt_win, "Input.fasta", "Drug target list", \$e_val_4, \$out_fmt_4, \$word_size_4, \$sub_matrix_4, \$gap_score_4, \$threshold_4,\$perc_identity_4,\$extra_params_BLAST4);	
+	
+	},)->g_grid(-column=>1,-row=>10,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
+	
 	
 	
 	
 	my $ok=$frm1->new_button(-text=>"Close",-width=>10,-command=>sub 
 		{
 		$crt_win->g_destroy();
-		})->g_grid(-column=>0,-row=>6,-padx=>1,-pady=>5,-sticky=>"ne");	
+		})->g_grid(-column=>0,-row=>15,-padx=>1,-pady=>5,-sticky=>"ne");	
 }
 
 
@@ -2354,19 +2087,16 @@ sub process_centrality_measure_file
  open (O,$file) or die"$! $file";
  my %h;
  while(<O>){
-	next if /^#/;
-	my @l =split /\s+/,$_;
-	$h{$l[0]}={-PPI_database_id=>$l[1],
-	-degree	=>$l[2],
-	-radiality	=>$l[3],
-	-closeness	=>$l[4],
-	-eccentricity	=>$l[5],
-	-normalized_total_score=>$l[6],
-	};
-	
-	
-	 
- }
+		next if /^#/;
+		my @l =split /\s+/,$_;
+		$h{$l[0]}={-PPI_database_id=>$l[1],
+		-degree	=>$l[2],
+		-radiality	=>$l[3],
+		-closeness	=>$l[4],
+		-eccentricity	=>$l[5],
+		-normalized_total_score=>$l[6],
+		};
+	}
  
  close O;
 
