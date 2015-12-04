@@ -26,7 +26,6 @@ print STDERR "
 
  This program is free software: you can redistribute it and/or modify
  it under the same terms as Perl itself. See (http://dev.perl.org/licenses/).
-
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -564,7 +563,7 @@ sub main_script
 			my $cdHit_c=$cd_hit_identity/100;
 			#print qq($cdhit_path -i $root_path/accepted_seq_step-1.fasta -o $root_path/cdHit_out -d 0-c $cdHit_c -n 3\n);
 			#system qq($cdhit_path -i $root_path/accepted_seq_step-1.fasta -o $root_path/cdHit_out -d 0-c $cdHit_c -n 3);
-=i			
+#=i			
 			unlink "$L_root_path/cdHit_out.clstr.txt";		
 			#`$cdhit_path -i $root_path/accepted_seq_step-1.fasta -o $root_path/cdHit_out -d 0 -c $cdHit_c -n 3`;
 			`echo echo off > batch.bat`;
@@ -584,7 +583,7 @@ sub main_script
 			`echo rename $root_path\\cdHit_out.clstr cdHit_out.clstr.txt >> batch.bat`;	##mv works
 			`echo exit >> batch.bat`;
 			system("start batch.bat ");
-=cut			
+#=cut			
 			
 			while(!(-e "$L_root_path/cdHit_out.clstr.txt")){Tkx::update(); sleep(1); $cdhit_prg=25;}	##wait till cdHit_out.clstr.txt is available
 			
@@ -609,7 +608,7 @@ sub main_script
 		
 	$blast_path=~ s{/}{\\}g; $blast_path='"'.$blast_path.'"';
 	$Hproteome_file=~ s{/}{\\}g;  $Hproteome_file='"\"'.$Hproteome_file.'\""';
-=i
+#=i
 	unlink "$L_root_path/host_orthologs_blast1.out.txt";
 	my($gap_open, $gap_extns)=split /,/,$gap_score_1;
 	my $blast1="$blast_path -p blastp -d $Hproteome_file -i $root_path\\accepted_seq_step-2.fasta -e $e_val_1 -m $out_fmt_1 -W $word_size_1 -M $sub_matrix_1 -G $gap_open -E $gap_extns -o $root_path\\host_orthologs_blast1.out -a $use_cores -f $threshold_1"." $extra_params_BLAST1";
@@ -637,7 +636,7 @@ sub main_script
 			`echo rename $root_path\\host_orthologs_blast1.out host_orthologs_blast1.out.txt >> batch.bat`;	##mv works
 			`echo exit >> batch.bat`;
 			system("start batch.bat ");
-=cut			
+#=cut			
 	while(!(-e "$L_root_path/host_orthologs_blast1.out.txt")){
 			##wait till human_orthologs_blast1.out.txt is available
 			#print "$blast_prg1  $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})--\n";
@@ -742,7 +741,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			system("start batch.bat ");
 			while(-e "import.sql"){	$string_srch_prg=5;Tkx::update();sleep(1);	}
 			$string_srch_prg=35;Tkx::update();
-=i			
+#=i			
 			my $g = Graph::Undirected->new(); # An undirected graph.
 			my $driver   = "SQLite";
 			my $dsn = "DBI:$driver:dbname=$database";
@@ -986,11 +985,11 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 						
 			close N;
 			
-=cut		### IMPORTANT:  commnet the following one lines of code while DELETING cut	;just hacking to add shotcut @filtered_id;
+#=cut		### IMPORTANT:  commnet the following one lines of code while DELETING cut	;just hacking to add shotcut @filtered_id;
 			
-			my @sorted_filterd_ids = @{ids_in_fasta_seq("$L_root_path/accepted_seq_step-3.fasta")}; ## remove category
-			my (@ids_with_CC,@filtered_id,@not_filtered_id);		## remove category
-			@ids_with_CC = keys(%{process_centrality_measure_file("$L_root_path/Centrality_measures.txt")}); ## remove category
+#			my @sorted_filterd_ids = @{ids_in_fasta_seq("$L_root_path/accepted_seq_step-3.fasta")}; ## remove category
+#			my (@ids_with_CC,@filtered_id,@not_filtered_id);		## remove category
+#			@ids_with_CC = keys(%{process_centrality_measure_file("$L_root_path/Centrality_measures.txt")}); ## remove category
 			
 			
 			my $filt=int (($top_hub_perc/100)*($#ids_with_CC+1));				
@@ -1008,7 +1007,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			$string_srch_prg=90;Tkx::update();
 			$entry_drug_cand_ppi_app->delete(0, "end"); $entry_drug_cand_ppi_app->insert(0, $sequence_summary{-putative_drug_targets}) ;
 
-=i			
+#=i			
 			open (SIF, ">$L_root_path/filtered_hub_genes.SIF") or die "$!";
 			foreach my $seq_id(@filtered_id){
 				my $i = $g->connected_component_by_vertex($seq_id_to_PPI_id_map{$seq_id});	#return an index identifying the connected component the vertex belongs to
@@ -1016,7 +1015,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				foreach (@Connected_v ) {print SIF "$seq_id\t$PPI_id_to_seq_id_map{$_}\n";}
 			}
 			close SIF;
-=cut			
+#=cut			
 			sleep(1);	
 			$string_srch_prg=100;Tkx::update();
 			$save_result->configure(-state=>"normal");				
@@ -1047,7 +1046,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			$do_PPI_search->configure(-state=>"disabled");
 			$do_ess_pro_blast->configure(-state=>"disabled");
 			$Eproteome_file=~ s{/}{\\}g;   $Eproteome_file='"\"'.$Eproteome_file.'"\"';
-=i 
+#=i 
 			unlink "$L_root_path/essential_protein_blast2.out.txt";
 			my($gap_open, $gap_extns)=split /,/,$gap_score_2;
 			my $blast2="$blast_path -p blastp -d $Eproteome_file -i $root_path\\accepted_seq_step-3.fasta -e $e_val_2 -m $out_fmt_2 -W $word_size_2 -M $sub_matrix_2 -G $gap_open -E $gap_extns -o $root_path\\essential_protein_blast2.out -f $threshold_2 -a $use_cores"." $extra_params_BLAST2";
@@ -1074,7 +1073,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				`echo rename $root_path\\essential_protein_blast2.out essential_protein_blast2.out.txt >> batch.bat`;	##mv works
 				`echo exit >> batch.bat`;
 				system("start batch.bat ");
-=cut		
+#=cut		
 				while(!(-e "$L_root_path/essential_protein_blast2.out.txt")){
 				#print "$blast_prg2  $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})--\n";
 				my $t=$sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous}+$sequence_summary{-host_orthologs});
@@ -1302,9 +1301,6 @@ my $run_but=shift;
 			print IMG $gd->gif;
 			close IMG;
 		
-#=cut		
-		 
-	  
 	  Tkx::image_create_photo( "BROAD_SPE", -file => "$img_broad_spec");
 	  $$canvas->create_image(400, 0, -image=>"BROAD_SPE", -anchor =>'n' );
 	  
@@ -1381,7 +1377,9 @@ sub comp_known_DT
 	$drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");	#' {All} {drugBank} {PTTD} ';	##read files to update it;
 	$ref_drug_db_array=[];
 	open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
+	
 	$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+	
 	$drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
@@ -1440,7 +1438,10 @@ sub comp_known_DT
 				}	##wait till blast4.out.txt is available
 				$blast_prg4=100;  Tkx::update();
 				
+				#print "process_host_blast_out(unix_path($input_seq),$L_root_path/drug_target_blast4.out.txt ,0)\n";
+				#print unix_path($input_seq);
 				my($known_drug_targets,$novel_drug_targets)=process_host_blast_out(unix_path($input_seq),"$L_root_path/drug_target_blast4.out.txt",0);
+				
 				
 				my @all_known_drug_targets=keys %{$drug_target_annot};
 				my ($not_identified_drugTarget,$identified_drugTarget,$identified_novel_drugTarget)=(scalar@all_known_drug_targets-scalar@$known_drug_targets,scalar@$known_drug_targets,scalar@$novel_drug_targets);
@@ -1482,6 +1483,7 @@ sub comp_known_DT
 							++$c;
 							my @l=split /\s+/,$_;
 							##sp|Q8GBW6|12S_PROFR	Methylmalonyl-CoA carboxyltransferase 12S subunit	DB04045; DB04183	Propionibacterium freudenreichii subsp. shermanii	Q8GBW6
+							print O "$l[0]\n";
 							print O "$c\t$l[0]\t$l[1]\t$drug_target_annot->{$l[1]}->[1]\t$drug_target_annot->{$l[1]}->[2]\t$drug_target_annot->{$l[1]}->[3]\t$drug_target_annot->{$l[1]}->[4]\n";		
 						}
 						close O; close D;
@@ -2068,7 +2070,7 @@ sub ids_in_fasta_seq
 
 ##args: cdhit clstroutput
 ##returns: reference of two arrays;\@paralogs,\@uniq
-sub process_cdHit_clstr_1			##Correct method, not inclusidn the fist hit of a cluster
+sub process_cdHit_clstr			##Correct method, not inclusidn the fist hit of a cluster
 {
 my $file=shift;
 my (@paralogs,@uniq);
@@ -2099,7 +2101,7 @@ while(<P>){
 0	659aa, >tr|A8FMX5|A8FMX5_CAMJ8... *
 parse the lines with ^0 as uniq and other than 0 as paralog
 =cut
-sub process_cdHit_clstr			##Incorrect method, including the fist hit of a cluster
+sub process_cdHit_clstr_1			##Incorrect method, including the fist hit of a cluster
 {
 my $file=shift;
 my (@paralogs,@uniq);
@@ -2136,7 +2138,7 @@ sub process_host_blast_out
 	@blast_hits= keys %a;
 	
 	my @b;
-	open (P,$input_seq) or die "$!  88 $input_seq";
+	open (P,$input_seq) or die "$!$input_seq";
 	while(<P>){
 	if(/^>(\S+)/){my $t=$1; $t=~s/\|/\\|/g;  if(!(grep{/^$t$/}@blast_hits)){ $t=~s/\\\|/|/g; push @non_blast_hits,$t; }      }
 	#else{}
@@ -2254,6 +2256,7 @@ my $os=shift || 'W';
 my $p=`echo %USERPROFILE%`;
 chomp($p);
 $p.='\Desktop';		##in users desktop;
+$p = '"'.$p.'"';
 if(uc($os) eq 'L'){$p=~s/\\/\//g; return $p;}
 else{return $p;}
 }
@@ -2263,10 +2266,11 @@ else{return $p;}
 sub unix_path
 {
 	my $p = shift;
+	#chomp ($p);		##
 	$p=~s/\\/\//g;		## \\ to /
-	$p=~s/\s/\\ /g;		## replace spaces to \ 
-	$p=~s/"//g;			## remove ""
-	return $p;			##
+	#$p=~s/\s/\\ /g;		## replace spaces to \ 
+	#$p=~s/"/'/g;			## remove ""
+	return "$p";			##
 }
 
 Tkx::MainLoop();
