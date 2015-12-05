@@ -99,10 +99,16 @@ our $drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN
 print STDERR "DONE";
 our $enable_broad_spe=1;			##decrypted
 print STDERR "\nReading broad-spectrum data:";
-our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array("$installation_path/local_dat/broad_spectrum_db_list.txt","$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
+our $broad_spectrum_pathogen_db_sq =$installation_path."\\local_dat\\pathogen_taxonomy.db";
+$broad_spectrum_pathogen_db_sq=~s/\//\\/g;
 ##'"\"COMPLETE_PTM_PATHPGENS\" "COMPLETE_PTM_PATHPGENS\ACIBC" "COMPLETE_PTM_PATHPGENS\ACIBS" "COMPLETE_PTM_PATHPGENS\ACIBT" "COMPLETE_PTM_PATHPGENS\BURM1\""';##read files to update it;
 our $broad_spe_species_per_query=0;
 our $broad_spe_org_code_full_name=read_broad_spe_codes("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
+our $tax_level="Family";
+our $brd_sp_db_levels;
+our $ref_brd_sel_db_array=[]; ## array ref ; array saves  tax_levels sel by user			
+($brd_sp_db_levels,$ref_brd_sel_db_array) = fetch_tax_names($tax_level);		
+our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
 print STDERR "DONE\n";
 
 our $database = $installation_path."\\local_dat\\PPI\\PPI_sqlite3.db";
@@ -574,6 +580,7 @@ sub main_script
 	Tkx::update();
 
 	Tkx::tk___messageBox(-message => "Select an target prediction approach\nPerform either 'Sequence-based approach'  or 'PPI network-based approach' ");
+	
 ###do_PPI_search	
 	$do_PPI_search->configure(-command=>sub{
 			if(!$PPI_id_map_file){
@@ -681,6 +688,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			while(my @row = $sth->fetchrow_array()) {
 				$g->add_edge($row[0],$row[1]);			
 			}
+			
 		##Calculating nodes		
 			$string_srch_prg=40;Tkx::update();
 			my @V = $g->vertices;		## nodes in array
@@ -924,7 +932,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 
 	});
 		
-		
+
 ###do_ess_pro_blast		
 	$do_ess_pro_blast->configure(-command=>sub{
 
@@ -1044,13 +1052,13 @@ sub broad_spect_run
 	
 	my ($input_seq,$brd_blast_db); 		##
 	$input_seq = ($Tproteome_file?"$L_root_path/accepted_seq_step-4_1.fasta":"");
-	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "10 50 0 0");
+	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "10 20 0 0");
 	$new_frm->g_grid(-column=>0,-row=>2,-sticky=>"nswe");
 	
 	$new_frm->new_ttk__label(-text=>"Input target sequences")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
 	
 	$new_frm->new_ttk__label(-text=>"Output folder")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
-	$new_frm->new_ttk__label(-text=>"Use Settings (Alt+s) Menu for parameter setting",-foreground=>"red",-justify=>"right")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
+	$new_frm->new_ttk__label(-text=>"Use Settings (Alt+s) Menu for parameter setting",-foreground=>"red",-justify=>"right")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
 	
 	$new_frm ->new_ttk__entry(-textvariable => \$input_seq,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
 	$new_frm ->new_ttk__entry(-textvariable => \$root_path,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
@@ -1705,25 +1713,56 @@ sub down_str_anal
 	$frm1->new_ttk__label(-text=>"BLAST identity threshold for broad-spectrum analysis(%):",)->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");	
 	my $broad_spe_BLAST_identity=$frm1->new_ttk__entry(-textvariable => \$perc_identity_3, -width=>3,-state=>"normal",);
 	$broad_spe_BLAST_identity->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");	
+	##BROAD_spe DATABASE
+	$frm1->new_ttk__label(-text=>"Select Pathogens range",)->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>0,-sticky=>"sw");	
+	$frm1->new_ttk__label(-text=>"(Select a taxnomy level click Apply.\nUse Ctrl to select multiples)",)->g_grid(-column=>0,-row=>4,-padx=>2,-pady=>0,-sticky=>"wn");	
+	$frm1->new_ttk__combobox(-textvariable =>\$tax_level ,-values=> "Phylum Class Order Family Genus", -width=>12,-state=>'readonly')->g_grid(-column=>0,-row=>5,-padx=>2,-pady=>1,-sticky=>"nw");
+	#my  $brd_sp_db_levels;		#	' {All} {drugBank} {PTTD} ';
+	my $sel_entries;			## stores a ref to array; ech entru cooresponds to a entryin list; so @idx match to list array
+	my $u8;						## just a temp variable
+	($u8,$sel_entries) = fetch_tax_names($tax_level);		
+	$frm1->new_button(-text=>"Apply",-width=>10,-command=>sub 
+		{	
+			($brd_sp_db_levels,$sel_entries) = fetch_tax_names($tax_level);	
+			
+			
+		})->g_grid(-column=>0,-row=>6,-padx=>1,-pady=>5,-sticky=>"nw");	
 	
-	$frm1->new_ttk__label(-text=>"Select known drug target database(s)",)->g_grid(-column=>0,-row=>4,-padx=>2,-pady=>0,-sticky=>"sw");	
-	$frm1->new_ttk__label(-text=>"(use Ctrl or Select button to select multiple databases)",)->g_grid(-column=>0,-row=>6,-padx=>2,-pady=>0,-sticky=>"n");	
-	my $lbox=$frm1->new_tk__listbox(-height =>4,-listvariable => \$drug_db_names,-selectmode=>'extended');
-	$lbox->g_grid(-column=>1,-row=>4,-padx=>2,-pady=>5,-rowspan => 4,-columnspan=>3, -sticky => "nsew");	##-selectmode=>'browse'
-	my $sel_drug_tar_db;
-	$lbox->selection_set(0,scalar@$ref_drug_db_array);
+	#we may show a textbox with number of species selected  scalar @ref_brd_sel_db_array
+	#$frm1->new_ttk__entry(-textvariable => $extra, -width=>50,-state=>"disabled",);
+	#$broad_spectrum_pathogen_db_list
+	my $lbox=$frm1->new_tk__listbox(-height =>4,-listvariable => \$brd_sp_db_levels,-selectmode=>'extended');	
+	$lbox->g_grid(-column=>1,-row=>3,-padx=>2,-pady=>5,-rowspan => 4,-columnspan=>3, -sticky => "nsew");	##-selectmode=>'browse'	
+	$lbox->selection_set(0,scalar@$ref_brd_sel_db_array);
+	my @sel;
 	$lbox->g_bind("<<ListboxSelect>>", sub {
-			my @idx = $lbox->curselection;
+			my @idx = split /\s+/,$lbox->curselection;
+			if(scalar@idx ==1){@sel=()}						## fix if a single is clicked
+			foreach my $u(@idx){push @sel,@{$sel_entries}[$u];}
+			$ref_brd_sel_db_array=\@sel;
+			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
+	
+		});	
+	
+	
+	$frm1->new_ttk__label(-text=>"Select known drug target database(s)",)->g_grid(-column=>0,-row=>14,-padx=>2,-pady=>0,-sticky=>"sw");	
+	$frm1->new_ttk__label(-text=>"(use Ctrl or Select button to select multiple databases)",)->g_grid(-column=>0,-row=>16,-padx=>2,-pady=>0,-sticky=>"n");	
+	my $lbox2=$frm1->new_tk__listbox(-height =>4,-listvariable => \$drug_db_names,-selectmode=>'extended');
+	$lbox2->g_grid(-column=>1,-row=>14,-padx=>2,-pady=>5,-rowspan => 4,-columnspan=>3, -sticky => "nsew");	##-selectmode=>'browse'
+	my $sel_drug_tar_db;
+	$lbox2->selection_set(0,scalar@$ref_drug_db_array);
+	$lbox2->g_bind("<<ListboxSelect>>", sub {
+			my @idx = $lbox2->curselection;
 			$sel_drug_tar_db=join(",",@idx);
 			$ref_drug_db_array=\@idx;
 			$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
 	
 		});
-	$frm1->new_ttk__label(-text=>"BLAST settings against drug-target database:",)->g_grid(-column=>0,-row=>10,-padx=>2,-pady=>5,-sticky=>"nw");	
+	$frm1->new_ttk__label(-text=>"BLAST settings against drug-target database:",)->g_grid(-column=>0,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw");	
 	$frm1->new_button(-text=>"Change/view",-width=>10,-command=>sub{
 		view_update_blast_params ("BLASTp against drug-target database", \$crt_win, "Input.fasta", "Drug target list", \$e_val_4, \$out_fmt_4, \$word_size_4, \$sub_matrix_4, \$gap_score_4, \$threshold_4,\$perc_identity_4,\$extra_params_BLAST4);	
 	
-	},)->g_grid(-column=>1,-row=>10,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
+	},)->g_grid(-column=>1,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
 	
 	
 	
@@ -1731,29 +1770,42 @@ sub down_str_anal
 	my $ok=$frm1->new_button(-text=>"Close",-width=>10,-command=>sub 
 		{
 		$crt_win->g_destroy();
-		})->g_grid(-column=>0,-row=>15,-padx=>1,-pady=>5,-sticky=>"ne");	
+		})->g_grid(-column=>0,-row=>30,-padx=>1,-pady=>5,-sticky=>"ne");	
+}
+
+
+sub fetch_tax_names
+{
+	my $level=shift;
+	my $sql="\"SELECT DISTINCT $level from taxonomy\"";
+	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
+	my @l = split /\n/,$l;
+	$l = join('} {',@l); $l = " {".$l."} ";
+	return ("$l",\@l);
+	
 }
 
 
 
-##args:dat file,path
+##args:	ref of array contain tax level names, L path
 ##returns: an scalar containting blast db naemss(windows formated)
 sub create_broad_spe_db_array
 {
-	my $file=shift;
+	my $array=shift;
 	my $path=shift;
 	my $db_list;
-	$path=~ s{/}{\\}g; #$root_path='"'.$root_path.'"'; 
+	$path=~ s{/}{\\}g; 
+	my $range = join ('\",\"',@$array); $range='(\"'.$range.'\")';
+	my $sql="\"SELECT fasta_file from taxonomy WHERE $tax_level IN $range\"";
+	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
+	my @l = split /\n/,$l;
+	
 	my @db;
-	open(F,"<$file") or die "$! $file\n  ";
-	while(<F>)
+	foreach(@l)
 	{
-		chomp;
-		next if(/^#/ or !$_);
 		my $r='\"'.$path.'\\'.$_.'\"';
 		push @db,$r;
 	}
-	close F;
 	
 	$db_list=join(" ",@db); #$db_list.="-"; $db_list=~s/\"-//g;
 	$db_list='"'.$db_list.'"';
