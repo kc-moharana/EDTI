@@ -464,8 +464,8 @@ sub main_script
 	###########################################################
 
 	$all_t_seq=read_fasta_sequence($Tproteome_file);
-	open(R1,"> $L_root_path/excluded_seq_step-1.fasta") or die "$L_root_path/excluded_seq_step-1.fasta";
-	open(A1,"> $L_root_path/accepted_seq_step-1.fasta") or die "$L_root_path/accepted_seq_step-1.fasta";
+	open(R1,"> $L_root_path/excluded_seq_step-1.fasta") or die " $! $L_root_path/excluded_seq_step-1.fasta";
+	open(A1,"> $L_root_path/accepted_seq_step-1.fasta") or die "$! $L_root_path/accepted_seq_step-1.fasta";
 	$sequence_summary{-total_seq}=scalar keys %$all_t_seq;
 	$entry_tot_seq->delete(0, "end"); $entry_tot_seq->insert(0, $sequence_summary{-total_seq}) ;
 	$read_seq_prg=100;Tkx::update();
@@ -1393,9 +1393,12 @@ sub create_project
 	
 		my $create_proj_but=$frm1->new_button(-text=>"Create project",-width=>18,-command=>sub{
 		$frm1->g_destroy;
-		$root_path.="/$project_name";												##updating root path
-		$L_root_path=$root_path;													##preserve UNIX format
-		$root_path=~ s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format
+		$root_path=~s/"//g    if $root_path=~m/"/g;									## replace ""
+		$root_path=~ s{/}{\\}g;  						##Convert to windows format
+		$root_path =~s/""/"/g;															##sanity check; sometimes project name " " overlaps; 
+		$root_path.="\\$project_name";												##updating root path
+		$root_path='"'.$root_path.'"';
+		$L_root_path=unix_path($root_path);											##preserve UNIX format; fail safe
 		my $frm2=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
 		$frm2->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
 		
