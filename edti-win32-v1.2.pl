@@ -1,6 +1,7 @@
 use strict;
 use Tkx;
 use GD::Graph::bars;
+use GD::Graph::hbars;
 Tkx::package_require("tile");
 Tkx::package_require("BWidget");
 #Tkx::package_require('tooltip');
@@ -11,6 +12,8 @@ use Graph;
 use Graph::Undirected;
 use File::Copy qw(copy);
 #use LWP::Simple;
+use constant PI => 3.1415926536;
+use constant SIGNIFICANT => 5; 		# number of significant digits to be returned
 
 
 
@@ -26,15 +29,20 @@ print STDERR "
 
  This program is free software: you can redistribute it and/or modify
  it under the same terms as Perl itself. See (http://dev.perl.org/licenses/).
+ 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
  
 ";
+
 ############################
 #  GLOBAL VARIABLES       ##
 ############################
+
+
+
 
 our $Tproteome_file;	## Target proteome aa sequence; FASTA format
 our $Hproteome_file;	## Host proteome aa sequence; FASTA format
@@ -50,7 +58,7 @@ $root_path=~s/\//\\\\/g;					##Win formated
 our $L_root_path = get_my_document_path('L');	## keeping an extra variable; storing path in Unix format
 our $installation_path=getcwd();			##dont update; essential data files and folders;
 #$installation_path=~s/\//\\\\/g;
-our $last_update="25 June 2015";
+our $last_update="06 Dec 2015";
 
 our $front_page_status="File > Create a new project. ";
 our $filter_param_settings_file;						#$root_path."/param.txt";
@@ -90,6 +98,7 @@ our $min_aa_len=50; #after translations
 #our $min_ntd_len=100;
 our $cd_hit_identity=60;
 our $chk_cdhit=1;
+
 print STDERR "Reading drug Target data:";
 our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
 our $ref_drug_db_array=[];
@@ -99,29 +108,29 @@ our $drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN
 print STDERR "DONE";
 our $enable_broad_spe=1;			##decrypted
 print STDERR "\nReading broad-spectrum data:";
-our $broad_spectrum_pathogen_db_sq =$installation_path."\\local_dat\\pathogen_taxonomy.db";
-$broad_spectrum_pathogen_db_sq=~s/\//\\/g;
-##'"\"COMPLETE_PTM_PATHPGENS\" "COMPLETE_PTM_PATHPGENS\ACIBC" "COMPLETE_PTM_PATHPGENS\ACIBS" "COMPLETE_PTM_PATHPGENS\ACIBT" "COMPLETE_PTM_PATHPGENS\BURM1\""';##read files to update it;
+our $broad_spectrum_pathogen_db_sq = win_path($installation_path."\\local_dat\\pathogen_taxonomy.db");
+#$broad_spectrum_pathogen_db_sq=win_path($broad_spectrum_pathogen_db_sq);
+##'"\"PATHOGENS\" "PATHOGENS\ACIBC" "PATHOGENS\ACIBS" "PATHOGENS\ACIBT" "PATHOGENS\BURM1\""';##read files to update it;
 our $broad_spe_species_per_query=0;
-our $broad_spe_org_code_full_name=read_broad_spe_codes("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
+our $broad_spe_org_code_full_name=read_broad_spe_codes();					#("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
 our $tax_level="Family";
 our $brd_sp_db_levels;
 our $ref_brd_sel_db_array=[]; ## array ref ; array saves  tax_levels sel by user			
 ($brd_sp_db_levels,$ref_brd_sel_db_array) = fetch_tax_names($tax_level);		
-our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
+our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
 print STDERR "DONE\n";
 
-our $database = $installation_path."\\local_dat\\PPI\\PPI_sqlite3.db";
-	$database =~s/\//\\/g;
+our $database = win_path($installation_path."\\local_dat\\PPI\\PPI_sqlite3.db");
 
 our $blast_prg1=0; 
 our $blast_prg2=0;
 our $blast_prg4=0;		## drugBank progress
 our $blast_prg3=0;
+our $blast_prg5=0;
 
 
 our ($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=("$installation_path/executables/blastall.exe","$installation_path/executables/cd-hit.exe","$installation_path/executables/formatdb.exe","$installation_path/executables/sqlite3.exe");
-
+($blast_path,$cdhit_path,$formatdb_path,$sqlite_path) = (win_path($blast_path),win_path($cdhit_path),win_path($formatdb_path),win_path($sqlite_path)) ;
 
 our ($e_val_1,$out_fmt_1,$sub_matrix_1,$gap_score_1, $extra_params_BLAST1,$word_size_1,$threshold_1,$perc_identity_1)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,20);	#-b 1
 
@@ -134,6 +143,15 @@ our ($e_val_4,$out_fmt_4,$sub_matrix_4,$gap_score_4, $extra_params_BLAST4,$word_
 our $PPI_score_cutoff=700;		##STRING score cutoff
 our $top_hub_perc=20;
 
+
+###Variable for Ontology analysis
+#params for finding sismilarity with E.coli
+our $model_org_ref_proteome = win_path($installation_path."\\local_dat\\GO\\UP000000625_83333.fasta");		##E.coli is used as refernce for all ontology analaysis
+our $GO_db = $installation_path."/local_dat/GO/GO.db";		##contains two tables ecoli_go, go_terms
+#our $model_org_ref_proteome_GO = process_GO_db($installation_path."/local_dat/GO/UP000000625_83333.GO.txt");		##E.coli is used as refernce for all ontology analaysis ; stores ref hash
+our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0);
+
+
 our	$brd_spec_chk=1;
 our	$drg_tar_blast_chk=1;
 our	$KEGG_chk=0;
@@ -141,11 +159,20 @@ our	$sub_cel_loc_chk=0;
 
 
 
+
+
 my $about_text="The availability of complete genome sequences of pathogenic bacteria and their protein complements in public domain has made it possible to determine potential drug targets in these pathogens using computer-based in-silico techniques. Intersection of two datasets, namely \n\t(i)a pathogen's subtractive proteome dataset with the host proteome, and \n\t(ii) the pathogen's minimal essential protein dataset, should represent a set of proteins whose manipulation may reasonably be expected to interfere with the pathogen's survival without adversely affecting the host. These proteins could thus act as potential targets for drugs acting against the particular pathogen.\n\nThis program comes with ABSOLUTELY NO WARRANTY; for details http://www.gnu.org/licenses/.
 This is free software, and you are welcome to redistribute it under certain conditions.\n\n";
-
-
 my $citation_text="Sarangi AN et al., Exogeneous drug target identifiation tool.\nPMID:000000";
+
+## MAKING SCRIPT MORE INDEPENDANT
+
+if(! -d $installation_path."/executables/"){ print STDERR $installation_path."/executables/ : directory Not found. Creating one."; mkdir  $installation_path."/executables/", 0755}
+if(! -d $installation_path."/local_dat/"){ print STDERR $installation_path."/local_dat/ : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/", 0755}
+if(! -d $installation_path."/local_dat/PATHOGENS"){ print STDERR $installation_path."/local_dat/PATHOGENS : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PATHOGENS", 0755}
+if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR $installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755}
+if(! -d $installation_path."/local_dat/PPI"){ print STDERR $installation_path."/local_dat/PPI : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PPI", 0755}
+if(! -d $installation_path."/local_dat/GO"){ print STDERR $installation_path."/local_dat/GO : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/GO", 0755}
 
 
 if($filter_param_settings_file){
@@ -228,13 +255,14 @@ $mw->configure(-menu => $menu);
 #create menu object instances
 my $file = $menu->new_menu;
 my $settings = $menu->new_menu;
-#my $utils = $menu->new_menu;
+my $utils = $menu->new_menu;
 my $dwn_str_anal=$menu->new_menu;
 my $help = $menu->new_menu;
 
 $menu->add_cascade(-menu => $file, -label => "File",-underline=>0);
 $menu->add_cascade(-menu => $settings, -label => "Settings",-underline=>0);
 $menu->add_cascade(-menu => $dwn_str_anal, -label => "Downstream analysis",-underline=>0);
+$menu->add_cascade(-menu => $utils, -label => "Utilities",-underline=>0,);
 $menu->add_cascade(-menu => $help, -label => "Help",-underline=>0,);
 my $system = Tkx::widget->new(Tkx::menu($menu->_mpath . ".system"));
 $menu->add_cascade(-menu => $system);
@@ -260,6 +288,10 @@ $dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>1, -co
 $dwn_str_anal->add_command(-label =>"Compare with known targets", -underline=>1, -command =>sub {});
 $dwn_str_anal->add_command(-label =>"GO analysis",-underline=>1, -command =>sub {});
 $dwn_str_anal->add_command(-label =>"Sub-cellular localization",-underline=>1, -command =>sub {});
+
+$utils->add_command(-label =>"Add pathogens for broadspectrum analysis", -underline=>5, -command =>sub {});
+$utils->add_command(-label =>"Add a drug taerget  database", -underline=>6, -command =>sub {});
+$utils->add_command(-label =>"Create PPI mapping file", -underline=>6, -command =>sub {});
 
 
 $help->add_command(-label => "Manual",-underline=>0, -command =>\&manual);	
@@ -295,7 +327,7 @@ my $save_options_but=$frnt_bottom->new_button(-text=>"Save options to file",-wid
 my $filter_param_save_file=$L_root_path."/Parameters.txt";
 open (P, ">$filter_param_save_file") or die "$!";
 
- print P "
+print P "
 CPU =  $use_cores
 MIN_AA_LEN = $min_aa_len
 CHK_CD_HIT = $chk_cdhit 
@@ -349,6 +381,7 @@ $save_options_but->g_grid(-column=>2, -row=>0,-sticky=>"e", -padx=>10);
 
 $dwn_str_anal->entryconfigure("Broadspectrum analysis", -command =>sub{ $frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); broad_spect_run(\$frnt,\$run_but); }); 
 $dwn_str_anal->entryconfigure("Compare with known targets", -command =>sub{ $frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); comp_known_DT(\$frnt,\$run_but); }); 
+$dwn_str_anal->entryconfigure("GO analysis", -command =>sub{ $frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); GO_analysis(\$frnt,\$run_but); }); 
 
 Tkx::update();
 
@@ -495,7 +528,7 @@ sub main_script
 			`echo echo :: External program cd-hit.exe :: >> batch.bat`;
 			`echo echo ---------------------------------------------- >> batch.bat`;
 			
-			`echo echo 	Input		: $root_path/accepted_seq_step-1.fasta >> batch.bat`;
+			`echo echo 	Input		: $root_path\\accepted_seq_step-1.fasta >> batch.bat`;
 			`echo echo 	Sequence identity threshold	: $cd_hit_identity\% >> batch.bat`;
 			`echo echo 	Word_length	: 3 >> batch.bat`;
 			`echo echo 	Other parameters	: Default (refer to cd-hit website) >> batch.bat`;
@@ -688,7 +721,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			while(my @row = $sth->fetchrow_array()) {
 				$g->add_edge($row[0],$row[1]);			
 			}
-			
+			$sth->finish(); $dbh->disconnect();
 		##Calculating nodes		
 			$string_srch_prg=40;Tkx::update();
 			my @V = $g->vertices;		## nodes in array
@@ -1367,7 +1400,411 @@ sub comp_known_DT
 	});	##END of run button sub
 }
 
+#Args##
+#Returns
+#http://www.uniprot.org/uniprot/?query=gene%3aseca+AND+organism%3a83333&format=tab&columns=id,protein%20names,genes,go,go-id
+#http://geneontology.org/page/download-ontology
+	##Extract go_daily-termdb-tables.gz and copy the term.txt
+	
+##E coli reference proteome as standard
+			#ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Bacteria/UP000000625_83333.fasta.gz
+sub GO_analysis{
+	
+	my $frm=shift;
+	my $run_button = shift;	
+	my $frm_top=$$frm->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 500,-padding => "0 0 0 0");
+	$frm_top->g_grid(-column=>0,-row=>0,-sticky=>"nswe");
+		
+	Tkx::image_create_photo( "BANER", -file => "banner.gif");
+	($frm_top->new_ttk__label(-image=>'BANER'))->g_grid(-column=>0, -row=>0,-sticky=>"nwes",-columnspan=>2, -padx=>60);	
+	my $heading = $frm_top->new_ttk__label(-text=>"Exogeneous Drug Target Identification Tool",-justify=>"center",-foreground=>"blue",-font => "Helvetica 16 bold underline");
+	$heading->g_grid(-column=>0,-row=>0,-sticky=>"s",-padx=>50);
+	$frm_top->new_ttk__label(-text=>"GENE ONTOLOGY ENRICHMENT ANALYSIS",-justify=>"left",-foreground=>"darkgreen",-font => "Helvetica 12")->g_grid(-column=>0,-row=>1,-sticky=>"s",-padx=>0);
+	
+	my ($input_seq,$background_seq);
+	$input_seq = ($Tproteome_file?"$L_root_path/accepted_seq_step-4_1.fasta":"");	##Skipp if project defined;
+	$background_seq = ($Tproteome_file?$Tproteome_file:"");							##Skipp if project defined;
+		
+	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "0 0 50 0");
+	$new_frm->g_grid(-column=>0,-row=>2,-sticky=>"nswe");
+	
+	$new_frm->new_ttk__label(-text=>"Input background sequences")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");	
+	$new_frm->new_ttk__label(-text=>"Input target sequences")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
+	$new_frm->new_ttk__label(-text=>"Output folder")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
+	
+	$new_frm->new_ttk__label(-text=>"Use Settings (Alt+s) Menu for parameter setting",-foreground=>"red",-justify=>"right")->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw", -columnspan=>2);
+	
+	$new_frm ->new_ttk__entry(-textvariable => \$background_seq,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
+	$new_frm ->new_ttk__entry(-textvariable => \$input_seq,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
+	$new_frm ->new_ttk__entry(-textvariable => \$root_path,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2);
+		
+	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+	$background_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
+	$sequence_summary{-total_seq}=count_fasta_seq($background_seq); 					## reset total background_seq counts; not called if in project call
+	$background_seq=~ s{/}{\\}g; $background_seq='"'.$background_seq.'"'; 					##Convert to windows format
+	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
+	
+	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+	$input_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
+	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
+	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
+	
+	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
+		if(!$root_path){$root_path=$L_root_path;}  							##if cancel pressed ; fail safe
+		$L_root_path=$root_path;													##preserve UNIX format
+		$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");	
+	
+	my $notebook = $new_frm->new_ttk__notebook;
+	$notebook->g_grid(-column=>0, -row=>5, -padx=>5, -pady=>5,-sticky=>"nw",-columnspan=>4, -rowspan=>5,);
+	my $f1 = $notebook->new_ttk__frame; # first page, which would get widgets gridded into it
+	my $f2 = $notebook->new_ttk__frame; # second page
+	my $f3 = $notebook->new_ttk__frame; # Third page
+	$notebook->add($f1, -text => "Biological Process");
+	$notebook->add($f2, -text => "Molecular Function");
+	$notebook->add($f3, -text => "Cellular Component");
 
+	my $canvas1 = $f1->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>400, -height=>250);
+	$canvas1->g_grid(-column=>1, -row=>5, -padx=>5, -pady=>1,-sticky=>"nw",-columnspan=>4);
+	my $hscroll1 = $f1->new_tk__scrollbar(-orient => "horizontal", -command => [$canvas1, "xview"]);
+	my $vscroll1 = $f1->new_tk__scrollbar(-orient => "vertical", -command => [$canvas1, "yview"]);
+	$hscroll1->g_grid(-column => 1, -row => 6, -sticky => "we",-columnspan=>4);
+	$vscroll1->g_grid(-column => 5, -row => 5, -sticky => "ns");
+	$f1->new_ttk__sizegrip()->g_grid(-column => 5, -row => 6, -sticky => "se");
+	$canvas1->configure(-yscrollcommand => [$vscroll1, "set"], -xscrollcommand => [$hscroll1, "set"]);
+	
+	my $canvas2 = $f2->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>400, -height=>250);
+	$canvas2->g_grid(-column=>1, -row=>5, -padx=>5, -pady=>1,-sticky=>"nw",-columnspan=>4);
+	my $hscroll2 = $f2->new_tk__scrollbar(-orient => "horizontal", -command => [$canvas2, "xview"]);
+	my $vscroll2 = $f2->new_tk__scrollbar(-orient => "vertical", -command => [$canvas2, "yview"]);
+	$hscroll2->g_grid(-column => 1, -row => 6, -sticky => "we",-columnspan=>4);
+	$vscroll2->g_grid(-column => 5, -row => 5, -sticky => "ns");
+	$f2->new_ttk__sizegrip()->g_grid(-column => 5, -row => 6, -sticky => "se");
+	$canvas2->configure(-yscrollcommand => [$vscroll2, "set"], -xscrollcommand => [$hscroll2, "set"]);
+	
+	my $canvas3 = $f3->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>400, -height=>250);
+	$canvas3->g_grid(-column=>1, -row=>5, -padx=>5, -pady=>1,-sticky=>"nw",-columnspan=>4);
+	my $hscroll3 = $f3->new_tk__scrollbar(-orient => "horizontal", -command => [$canvas3, "xview"]);
+	my $vscroll3 = $f3->new_tk__scrollbar(-orient => "vertical", -command => [$canvas3, "yview"]);
+	$hscroll3->g_grid(-column => 1, -row => 6, -sticky => "we",-columnspan=>4);
+	$vscroll3->g_grid(-column => 5, -row => 5, -sticky => "ns");
+	$f3->new_ttk__sizegrip()->g_grid(-column => 5, -row => 6, -sticky => "se");
+	$canvas3->configure(-yscrollcommand => [$vscroll3, "set"], -xscrollcommand => [$hscroll3, "set"]);
+
+	$new_frm->new_ttk__label(-text=>"Run progress (background):")->g_grid(-column=>5,-row=>5,-padx=>1,-pady=>5,-sticky=>"w");
+	my $prg_blast_brd_sp_1=$new_frm->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$blast_prg5);
+	$prg_blast_brd_sp_1->g_grid(-column=>6,-row=>5,-padx=>3,-pady=>1,-sticky=>"w");
+	
+	my $GO_ana_progress=0;
+	$new_frm->new_ttk__label(-text=>"Calculating GO :")->g_grid(-column=>5,-row=>6,-padx=>5,-pady=>1,-sticky=>"e");
+	my $prg_blast_brd_sp_2=$new_frm->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate',-variable=>\$GO_ana_progress);
+	$prg_blast_brd_sp_2->g_grid(-column=>6,-row=>6,-padx=>3,-pady=>1,-sticky=>"e");
+	
+	my $seq_used_for_analysis=$new_frm->new_button(-text=>"Sequeces with GO",-width=>15, -state=>"disabled");
+	$seq_used_for_analysis->g_grid(-column=>5, -row=>9,-padx=>2,-pady=>5,-sticky=>"w");
+	#my $save_go_enrich_table=$new_frm->new_button(-text=>"Export result as text",-width=>15, -state=>"disabled");
+	#$save_go_enrich_table->g_grid(-column=>6, -row=>9,-padx=>2,-pady=>5,-sticky=>"w");
+	
+	$$run_button->configure(-state=>"normal", -command =>sub {
+			my ($match,$mat_ids)=compare_two_fasta_file(unix_path($input_seq),unix_path($background_seq));
+			#print "Percentage of match in input file iwth bck $match\n";
+			
+			if($match<100){ 
+				Tkx::tk___messageBox(-message => "Warning:\nAll the input sequences are not present in background sequence file. $match% of target sequence found in Background sequence file"); 
+				my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),$mat_ids);	##
+				write_fasta_seq($r,"$L_root_path\/target_match_bckg_seq.fasta");
+				$input_seq = win_path("$L_root_path\/target_match_bckg_seq.fasta");
+				print STDERR "$L_root_path\/target_match_bckg_seq.fasta Created\n";				
+			}
+			
+			$$run_button->configure(-state=>"disabled");
+			unlink "$L_root_path/E_coli_ortho_blast5.out.txt";
+			my($gap_open, $gap_extns)=split /,/,$gap_score_5;
+			my $blast5="$blast_path -p blastp -d $model_org_ref_proteome -i $background_seq -e $e_val_5 -m $out_fmt_5 -W $word_size_5 -M $sub_matrix_5 -G $gap_open -E $gap_extns -o $root_path\\E_coli_ortho_blast5.out -a $use_cores -f $threshold_5"." $extra_params_BLAST5";
+				`echo echo off > batch.bat`;
+				`echo color 90 >> batch.bat`;
+				`echo cls >> batch.bat`;
+				`echo echo :: External program Blastall.exe :: >> batch.bat`;
+				`echo echo ---------------------------------------------- >> batch.bat`;
+				
+				`echo echo Parameters >> batch.bat`;
+				`echo echo 	Program: blastp >> batch.bat`;
+				`echo echo 	Query		: $background_seq >> batch.bat`;
+				`echo echo 	Database	: $model_org_ref_proteome >> batch.bat`;
+				`echo echo 	E-value	: $e_val_5 >> batch.bat`;
+				`echo echo 	Scoring matrix: $sub_matrix_5 >> batch.bat`;
+				`echo echo 	Gap-penalty (Open,Extension): $gap_open,$gap_extns >> batch.bat`;
+				`echo echo 	Word size : $word_size_5 >> batch.bat`;
+				`echo echo 	Threshold for extending hits : $threshold_5 >> batch.bat`;
+				`echo echo 	CPUs : $use_cores >> batch.bat`;
+				
+				
+				`echo echo Please wait.......... >> batch.bat`;
+				`echo $blast5 >> batch.bat`;
+				`echo rename $root_path\\E_coli_ortho_blast5.out E_coli_ortho_blast5.out.txt >> batch.bat`;	##mv works
+				`echo exit >> batch.bat`;
+				
+				system("start batch.bat ");
+				
+				while(!(-e "$L_root_path/E_coli_ortho_blast5.out.txt")){
+				$blast_prg5=blast_progress("$root_path\\E_coli_ortho_blast5.out","$L_root_path/E_coli_ortho_blast5.out",$sequence_summary{-total_seq} ); sleep(3); Tkx::update(); 
+				}	##wait till blast4.out.txt is available
+				$blast_prg5=100;  Tkx::update();
+				my $model_org_ortho = process_GO_BLAST_out("$L_root_path/E_coli_ortho_blast5.out.txt"); ## [-seq_id => Ecoli_id_uniprt_ac]; all genes; bckgrnd
+				$GO_ana_progress=10;
+				my $p=0;
+				my (%background_go_BP,%background_go_MF,%background_go_CC);
+				foreach my $g (keys %{$model_org_ortho} ){
+					my $go = fetch_GO_db($model_org_ortho->{$g});
+					$GO_ana_progress=(++$p/scalar (keys %$model_org_ortho))*50;
+					
+					foreach my $onto_cat (keys %$go)
+					{
+						
+						if($onto_cat eq 'biological_process') {$background_go_BP{$g}= $go->{biological_process} }
+						if($onto_cat eq 'cellular_component') {$background_go_CC{$g}= $go->{cellular_component} }
+						if($onto_cat eq 'molecular_function') {$background_go_MF{$g}= $go->{molecular_function} }
+						Tkx::update();
+					}
+					
+				}
+				
+				my @test_gene_set = (keys %{read_fasta_sequence(unix_path($input_seq))});
+				calc_GO_chi(\%background_go_BP,\@test_gene_set,$L_root_path."/GO_enrich_BP","GO enrichment : Biological Process");
+				$GO_ana_progress=70; Tkx::update();
+				my @test_gene_set = (keys %{read_fasta_sequence(unix_path($input_seq))});
+				calc_GO_chi(\%background_go_MF,\@test_gene_set,$L_root_path."/GO_enrich_MF","GO enrichment : Molecular Function");
+				$GO_ana_progress=80; Tkx::update();
+				my @test_gene_set = (keys %{read_fasta_sequence(unix_path($input_seq))});
+				calc_GO_chi(\%background_go_CC,\@test_gene_set,$L_root_path."/GO_enrich_CC","GO enrichment : Cellular Componenet");
+				$GO_ana_progress=90; Tkx::update();
+								
+				Tkx::image_create_photo( "BP", -file => $L_root_path."/GO_enrich_BP_enrich.gif");
+				$canvas1->create_image(250, 0, -image=>"BP", -anchor =>'n' );
+				Tkx::image_create_photo( "MF", -file => $L_root_path."/GO_enrich_MF_enrich.gif");
+				$canvas2->create_image(250, 0, -image=>"MF", -anchor =>'n' );
+				Tkx::image_create_photo( "CC", -file => $L_root_path."/GO_enrich_CC_enrich.gif");
+				$canvas3->create_image(250, 0, -image=>"CC", -anchor =>'n' );				
+				Tkx::update();
+
+				$seq_used_for_analysis->configure(-state=>"normal",-command=>sub{
+					my $save_result = Tkx::tk___getSaveFile();
+					#$crt_win->g_raise();
+					my $r=fetch_seq_by_id(read_fasta_sequence(unix_path($input_seq)),\@test_gene_set);	##
+					write_fasta_seq($r,"$save_result") if $save_result ;
+									
+				});
+				
+				
+				$GO_ana_progress=100; Tkx::update();
+				
+				Tkx::tk___messageBox(-message => "Run completete. See output folder for results."); 
+								
+		});
+	
+	
+
+}##END GO anal
+
+##Args: a hash-ref of seq_id=>array_ref_of_"term|GO-id", a test seq_id arrayref, and a file prefix/path
+##Returns: creates a output file with (_BP/CC/MP.txt), a graphics file (_BP/CC/MP.gif))
+sub calc_GO_chi
+{
+	my $hash_ref=shift;
+	my $test_id=shift;
+	my $out_file=shift;
+	my $GO_category=shift || "GO enrichment analysis";
+	my $significance_thr=0.5;				#shift || 0.05;		## used to create Bar chart;
+	
+	my %categories;
+	my ($a,$b,$c,$d,$df)=(0,0,0,0,1);
+	
+	foreach my $gene (keys %{$hash_ref}){
+		foreach my $go_cat (@{$hash_ref->{$gene}})
+		{
+			my($term,$go_id) =split /\|/,$go_cat;
+			if(!exists $categories{$term} ){$categories{$term}={_a=>0,_b=>0,_c=>0,_d=>0, _go=>$go_id, _bg_gene=>[], _test_gene=>[]};}
+			$categories{$term}->{_a}++;
+			push  @{$categories{$term}->{_bg_gene}},$gene;
+		}	
+	}
+	
+	
+	foreach my $gene (@$test_id)
+	{
+		foreach my $go_cat (@{$hash_ref->{$gene}})
+		{
+			my($term,$go_id) =split /\|/,$go_cat;
+			if(!exists $categories{$term} ){warn "$term found in test set not in back ground \n"}
+			$categories{$term}->{_b}++;
+			push  @{$categories{$term}->{_test_gene}},$gene;
+		}	
+	}
+	
+	foreach (keys %categories)
+	{
+		$categories{$_}->{_c} = scalar (keys %$hash_ref) - $categories{$_}->{_a};
+		$categories{$_}->{_d} =  scalar @$test_id - $categories{$_}->{_b} ;
+	}
+	
+	open (O, ">$out_file\_enrich.txt") or die "$! $out_file\_enrich.txt";
+	print O "#Term\ttest_genes\tno_of_test_gene\tNo_of_bg_genes\tP-value\tBG_genes\n";
+	
+	my (@data,@categories, @freq, @p_vals);			## For GD plot
+		foreach (sort keys %categories)
+		{
+			next if $categories{$_}->{_b} <1;			## if <1 dont print;
+
+			#Chi-square calculation with Yates-correction
+			my $chi_sq_y = chi_squared_y($categories{$_}->{_a},$categories{$_}->{_b},$categories{$_}->{_c},$categories{$_}->{_d});
+			my $chi_p_val_y = chisqrprob($df,$chi_sq_y);
+			#printf "Chi-square value (Y):%4.3f\nP-value: %4.3f\n\n",$chi_sq_y,$chi_p_val_y,$p_val;
+			if($chi_p_val_y<$significance_thr)
+			{
+				push @categories,$_;
+				push @freq,$categories{$_}->{_b};
+				push @p_vals,sprintf("%4.3f",$chi_p_val_y) ;
+			}	
+			print O "$_\t".join(";",@{$categories{$_}->{_test_gene}});
+			print O "\t$categories{$_}->{_b}\t$categories{$_}->{_a}\t$chi_p_val_y\t";
+			print O "$_\t".join(";",@{$categories{$_}->{_bg_gene}});
+			print O "\n";
+				
+		}
+		close O;
+		if(scalar @categories <1){
+			Tkx::tk___messageBox(-message => "No significant (P-value< $significance_thr) GO enrichment found!! "); 
+			return 0;
+		}
+			
+		@data =(\@categories,\@freq);
+
+		my $graph_chart = GD::Graph::hbars->new(1000,900);
+		my $data_p = GD::Graph::Data->new([\@categories,\@p_vals] );
+
+		$graph_chart-> set (
+			x_label=> 'Categories',
+			y_label=> "Frequency \n(number at the top of bar is p-value)",
+			title=> $GO_category,
+			bar_spacing=>1,
+			show_values => $data_p,
+			correct_width=>1,
+			bgclr=>"white",
+			accentclr=>"white",
+			labelclr=>"black",
+			axislabelclr=>"black",
+			borderclrs=>"black",
+			fgclr =>"black",
+			boxclr=>"white",
+			transparent=>0,	
+			
+		);
+
+		my $gd =$graph_chart-> plot(\@data) or die $graph_chart-> error;
+		my $export="$out_file\_enrich.gif";
+		open(IMG, ">$export") or die $!;
+		binmode IMG;
+		print IMG $gd->gif;
+		close IMG;
+
+	
+	
+	
+	
+	
+	
+
+
+}
+
+##Args: a,b,c,d
+##Return: Chi-square value (Yates-correction applied)
+sub chi_squared_y {
+     my ($a,$b,$c,$d) = @_;
+     return 0 if($b+$d == 0);
+     my $n= $a + $b + $c + $d;
+	return (($n*(abs($a*$d - $b*$c)-($n/2))**2) / (($a + $b)*($c + $d)*($a + $c)*($b + $d)));
+}
+
+##Args: degree of freedom, Chi-square value
+##Return: P-value as float
+sub chisqrprob {
+	my ($n,$x) = @_;
+	my $p;
+
+	if ($x <= 0) {
+		$p = 1;
+	} elsif ($n > 100) {
+		$p = _subuprob((($x / $n) ** (1/3)
+				- (1 - 2/9/$n)) / sqrt(2/9/$n));
+	} elsif ($x > 400) {
+		$p = 0;
+	} else {   
+		my ($a, $i, $i1);
+		if (($n % 2) != 0) {
+			$p = 2 * _subuprob(sqrt($x));
+			$a = sqrt(2/PI) * exp(-$x/2) / sqrt($x);
+			$i1 = 1;
+		} else {
+			$p = $a = exp(-$x/2);
+			$i1 = 2;
+		}
+
+		for ($i = $i1; $i <= ($n-2); $i += 2) {
+			$a *= $x / $i;
+			$p += $a;
+		}
+	}
+	return $p;
+}
+##MEta function
+sub _subuprob {
+	my ($x) = @_;
+	my $p = 0; # if ($absx > 100)
+	my $absx = abs($x);
+
+	if ($absx < 1.9) {
+		$p = (1 +
+			$absx * (.049867347
+			  + $absx * (.0211410061
+			  	+ $absx * (.0032776263
+				  + $absx * (.0000380036
+					+ $absx * (.0000488906
+					  + $absx * .000005383)))))) ** -16/2;
+	} elsif ($absx <= 100) {
+		for (my $i = 18; $i >= 1; $i--) {
+			$p = $i / ($absx + $p);
+		}
+		$p = exp(-.5 * $absx * $absx) 
+			/ sqrt(2 * PI) / ($absx + $p);
+	}
+
+	$p = 1 - $p if ($x<0);
+	return $p;
+}
+
+##ARGS: two fasta file;file-A file-B; file-A will be checked against B
+##return : percentage of ids from A present in B (float); AND a ref to array of ids common in both file
+sub compare_two_fasta_file{
+	my ($fas_A,$fas_B)=@_;
+	my $a = read_fasta_sequence($fas_A);
+	my $b = read_fasta_sequence($fas_B);
+	my($a_mat,$a_tot)=(0,0);
+	my @m;
+	foreach my $i(keys %$a)
+	{
+		$a_tot++;
+		if ($b->{$i}){
+			$a_mat++;
+			push @m,$i;
+		}
+	}
+	undef $a; undef $b;	
+	my $m = sprintf("%4.1f",($a_mat/$a_tot)*100);
+	return ($m,\@m);
+}
 
 
 sub create_project
@@ -1532,7 +1969,11 @@ sub settings
 	$frm1->new_ttk__label(-text=>"Protein-protein interaction score cutoff:",)->g_grid(-column=>0,-row=>16,-padx=>2,-pady=>5,-sticky=>"nw");	
 	$frm1->new_ttk__entry(-textvariable => \$PPI_score_cutoff, -width=>3,-state=>"normal",)->g_grid(-column=>1,-row=>16,-padx=>2,-pady=>5,-sticky=>"nw");	
 	$frm1->new_ttk__label(-text=>"Top #% of hub proteins:",)->g_grid(-column=>0,-row=>17,-padx=>2,-pady=>5,-sticky=>"nw");	
-	$frm1->new_ttk__entry(-textvariable => \$top_hub_perc, -width=>3,-state=>"normal",)->g_grid(-column=>1,-row=>17,-padx=>2,-pady=>5,-sticky=>"nw");	
+	$frm1->new_ttk__entry(-textvariable => \$top_hub_perc, -width=>3,-state=>"normal",)->g_grid(-column=>1,-row=>17,-padx=>2,-pady=>5,-sticky=>"nw");
+
+
+
+	
 	my $apply_change=$frm1->new_button(-text=>"OK",-width=>8,-command=>sub {$crt_win->g_destroy;$mw->configure(-cursor=>"arrow");})->g_grid(-column=>0,-row=>25,-padx=>18,-pady=>12,-columnspan=>2,);
 	
 }
@@ -1575,7 +2016,7 @@ sub executable_paths
 						-icon => "error", -title => "File doesn't exits");$flg=0;  }			
 			if(!(-e $sqlite_path)){Tkx::tk___messageBox(-type => "ok",-message => "$sqlite_path does not exits",
 						-icon => "error", -title => "File doesn't exits");$flg=0;  }
-			if($flg){$crt_win->g_destroy;$mw->configure(-cursor=>"arrow");}
+			if($flg){$crt_win->g_destroy;$mw->configure(-cursor=>"arrow"); ($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=(win_path($blast_path),win_path($cdhit_path),win_path($formatdb_path),win_path($sqlite_path));   }
 			else{$crt_win->g_raise;}
 			
 		})->g_grid(-column=>1,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw");
@@ -1583,7 +2024,7 @@ sub executable_paths
 		{
 		##Chek if exe files exits
 			my $flg=1;
-			($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=("$installation_path/executables/blastall.exe","$installation_path/executables/cd-hit.exe","$installation_path/executables/formatdb.exe","$installation_path/executables/sqlite3.exe");
+			($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=(win_path("$installation_path/executables/blastall.exe"),win_path("$installation_path/executables/cd-hit.exe"),winpath("$installation_path/executables/formatdb.exe"),win_path("$installation_path/executables/sqlite3.exe"));
 			
 		})->g_grid(-column=>2,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw");	
 }
@@ -1743,7 +2184,7 @@ sub down_str_anal
 			if(scalar@idx ==1){@sel=()}						## fix if a single is clicked
 			foreach my $u(@idx){push @sel,@{$sel_entries}[$u];}
 			$ref_brd_sel_db_array=\@sel;
-			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/COMPLETE_PTM_PATHPGENS");
+			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
 	
 		});	
 	
@@ -1767,6 +2208,14 @@ sub down_str_anal
 	
 	},)->g_grid(-column=>1,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
 	
+	$frm1->new_ttk__label(-text=>"BLAST settings for enrichment analysis:",)->g_grid(-column=>0,-row=>21,-padx=>2,-pady=>5,-sticky=>"nw");	
+	$frm1->new_button(-text=>"Change/view",-width=>10,-command=>sub{
+		view_update_blast_params ("BLASTp against E.coli proteome database", \$crt_win, "Input.fasta", "E.coli proteome", \$e_val_5, \$out_fmt_5, \$word_size_5, \$sub_matrix_5, \$gap_score_5, \$threshold_5,\$perc_identity_5,\$extra_params_BLAST5);	
+	
+	},)->g_grid(-column=>1,-row=>21,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
+	
+	
+	
 	
 	
 	
@@ -1776,7 +2225,8 @@ sub down_str_anal
 		})->g_grid(-column=>0,-row=>30,-padx=>1,-pady=>5,-sticky=>"ne");	
 }
 
-
+##Args:
+##returns:
 sub fetch_tax_names
 {
 	my $level=shift;
@@ -1816,11 +2266,75 @@ sub create_broad_spe_db_array
 	return $db_list;
 }
 
+##ARgs: go_id, sqlite_database_handle
+##Returns: ref to a hash
+#ecoli_go  go_term
+#SELECT go_term.ontology_category, go_term.term. ecoli_go.go_id FROM go_term LEFT JOIN ecoli_go ON #go_term.go_id=ecoli_go.go_id WHERE ecoli_go.ecoli_ac = "P0A6A8";
+#molecular_function|acyl binding|GO:0000035
+#molecular_function|ACP phosphopantetheine attachment site binding involved in fatty acid biosynthetic process|GO:0000036
+#cellular_component|cytosol|GO:0005829
+#cellular_component|cytoplasm|GO:0005737
+#biological_process|fatty acid biosynthetic process|GO:0006633
+#biological_process|lipid biosynthetic process|GO:0008610
+#molecular_function|phosphopantetheine binding|GO:0031177
+sub fetch_GO_db
+{
+	my $ecoli_ac = shift;
+	
+	my $driver   = "SQLite";
+	my $dsn = "DBI:$driver:dbname=$GO_db";
+	my $userid = "";
+	my $password = "";
+	my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
+	or die $DBI::errstr;
+
+	my $stmt = qq(SELECT go_term.ontology_category, go_term.term, ecoli_go.go_id FROM go_term LEFT JOIN ecoli_go ON go_term.go_id=ecoli_go.go_id WHERE ecoli_go.ecoli_ac = \"$ecoli_ac\";);	#
+	my $sth = $dbh->prepare($stmt);
+	$sth->execute(); 
+	my $go_terms;			## ref of hash =
+		#{
+		#	-molecular_function=>[], ##acyl binding|GO:0000035, phosphopantetheine binding|GO:0031177
+		#	-cellular_component=>[],
+		#	-biological_process=>[],
+		#}	
+	my @row;
+	while ( @row = $sth->fetchrow_array()) {
+		$go_terms->{$row[0]}=[] if !$go_terms->{$row[0]}; 
+		push @{$go_terms->{$row[0]}},$row[1].'|'.$row[2];
+	}	
+	$sth->finish();
+	$dbh->disconnect();	
+	return $go_terms;		
+}
+
+##ARgs: blast tab out file
+##Returns: ref of hash; [ ]
+#sp|A8FJG5|DNAA_CAMJ8	sp|P03004|DNAA_ECOLI	37.65	332	203	2	101	430	132	461	3e-063	 235
+sub process_GO_BLAST_out
+{
+	my $file= shift;
+	my $identity = shift || 30;
+	my %h;
+	
+	open (O, "< $file") or die "$! ";
+	while(<O>)
+	{
+		chomp;
+		my @l = split /\s+/,$_;
+		if ($l[2]>=$identity)
+		{
+			my ($a,$ac,$t)= split /\|/,$l[1];
+			$h{$l[0]}=$ac; 
+		}		
+	}
+	close O;
+	return \%h;	
+}
 
 
 ##args:dat file;  code \t full name; strictly tab separated
-##returns: an ref of hash
-sub read_broad_spe_codes
+##returns: an ref of hash; ACIAD	Acinetobacter sp. (strain ADP1) 
+sub read_broad_spe_codes_1		##decrepeted
 {
 	my $file=shift;
 	my %h;
@@ -1833,6 +2347,26 @@ sub read_broad_spe_codes
 		$h{$l[0]}=$l[1];
 	}
 	close F;
+ return \%h;
+}
+
+
+##args: nothing
+##returns: an ref of hash; ACIAD	Acinetobacter sp. (strain ADP1) 
+sub read_broad_spe_codes
+{
+	
+	my %h;
+	my $sql="\"SELECT org_code,species from taxonomy\"";
+	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
+	my @l = split /\n/,$l;
+	foreach(@l)
+	{
+		chomp;
+		my @l=split /\|/,$_;
+		$h{$l[0]}=$l[1];
+	}
+	
  return \%h;
 }
 
@@ -2152,13 +2686,9 @@ sub process_centrality_measure_file
 		-normalized_total_score=>$l[6],
 		};
 	}
- 
- close O;
-
+  close O;
 return \%h;
 }
-
-
 
 
 ##Args: optionally 'L'/'W': default is windows format
@@ -2175,7 +2705,6 @@ if(uc($os) eq 'L'){$p=~s/\\/\//g; return $p;}
 else{$p = '"'.$p.'"'; return "$p";}
 }
 
-
 ##Args: Win formated path; STRING ("C:\\Users\\SGPGI.SGPGI-PC\\KANHU\\EDIT\\Prev_data";)
 ##returns: Unix formated path string (C:/Users/SGPGI.SGPGI-PC/KANHU/EDIT/Prev_data)
 sub unix_path
@@ -2184,7 +2713,21 @@ sub unix_path
 	#chomp ($p);		##
 	$p=~s/\\/\//g;		## \\ to /
 	$p=~s/"//g;
-	return "$p";			##
+	return "$p";		##
 }
+
+##Args: Unix formated path; STRING ; C:/Users/SGPGI.SGPGI-PC/KANHU/EDIT/Prev_data
+##returns: Win formated path string ("C:\\Users\\SGPGI.SGPGI-PC\\KANHU\\EDIT\\Prev_data")
+sub win_path
+{
+	my $p = shift;
+	chomp ($p);			##
+	#$p = ~s/"{2,}/"/g;		## sanity checking
+	$p=~s/\//\\/g;		##  /to \\
+	return '"'.$p.'"';			##
+}
+
+
+
 
 Tkx::MainLoop();
