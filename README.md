@@ -35,6 +35,7 @@ Following modules are need to be installed
 * Sat, Dec 05, 2015 9:29:32 PM : Broad spectrum analysis Settings; select pathogens based on taxonomy based selection;
 * Mon, Dec 07, 2015 12:13:11 PM : few path issues corrected
 * Fri, Dec 11, 2015  4:22:00 PM : GO enrichment analysis added
+* Fri, Dec 12, 2015  12:30:03 AM : Utilities menu added;
 
 ## Futures supported/proposed
 - [ ] Single project should contain all outputs
@@ -51,9 +52,9 @@ Following modules are need to be installed
  - [ ] Pathway enrichment
  - [ ] Sub-cellular localization prediction
 - [ ] Utility to create inputs
- - [ ] create PPI networks from STRING dataset
- - [ ] Create Drug traget database
- - [ ] create Broadspectrum analysis database
+ - [x] create PPI networks from STRING dataset
+ - [x] Create Drug traget database
+ - [x] create Broadspectrum analysis database
 - [ ] Create help doc
  - [x] MS Word Documnet
  - [ ] PDF Doc
