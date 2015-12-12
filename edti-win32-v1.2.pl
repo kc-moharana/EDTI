@@ -2845,9 +2845,9 @@ sub add_to_broad_spectrum_db
 	$total_lines = int `findstr /R /N "^" $taxonomy_file | find /C ":"`  if $taxonomy_file; 
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
 	
-		if (!$taxonomy_file || $fasta_dir){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&add_to_broad_spectrum_db(); return 0;}
+		if (!$taxonomy_file || !$fasta_dir){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&add_to_broad_spectrum_db(); return 0;}
 	
-		my $BLAST_DB_DIR='PATHOGEN';
+		my $BLAST_DB_DIR='PATHOGENS';
 		my $database = $installation_path.'/local_dat/pathogen_taxonomy.db';
 		
 		open (T, "< $taxonomy_file") or die "$! $taxonomy_file";
@@ -2916,7 +2916,7 @@ sub add_a_drug_target_db
 	my $drg_tar_prg=0; my $c=0;
 	
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-			if ((!$drug_targ_seq_file || $annot_file)|| !$prefix){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&add_a_drug_target_db(); return 0;}
+			if ((!$drug_targ_seq_file || !$annot_file)|| !$prefix){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&add_a_drug_target_db(); return 0;}
 	
 		my $BLAST_DB_DIR='KNOWN_DRUG_TARGETS';
 		my $database = 'drugTarget_db_names.txt';
