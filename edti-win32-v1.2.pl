@@ -11,7 +11,9 @@ use DBI;
 use Graph;
 use Graph::Undirected;
 use File::Copy qw(copy);
-#use LWP::Simple;
+use File::Which;
+use LWP::UserAgent;
+use HTTP::Request::Common;
 use constant PI => 3.1415926536;
 use constant SIGNIFICANT => 5; 		# number of significant digits to be returned
 
@@ -58,7 +60,7 @@ $root_path=~s/\//\\\\/g;					##Win formated
 our $L_root_path = get_my_document_path('L');	## keeping an extra variable; storing path in Unix format
 our $installation_path=getcwd();			##dont update; essential data files and folders;
 #$installation_path=~s/\//\\\\/g;
-our $last_update="12 Dec 2015";
+our $last_update="14 Dec 2015";
 
 our $front_page_status="File > Create a new project. ";
 our $filter_param_settings_file;						#$root_path."/param.txt";
@@ -83,7 +85,7 @@ my $avl_CPU_count=`wmic computersystem get numberofprocessors`;
 $avl_CPU_count=~s/NumberOfProcessors//g;
 $avl_CPU_count=~s/\n//g;
 if($avl_CPU_count==1){
-	$avl_CPU_count=	`wmic computersystem get NumberOfLogicalProcessors`;
+	$avl_CPU_count=	`wmic computersystem get NumberOfLogicalProcessors`;								#
 	$avl_CPU_count=~s/NumberOfLogicalProcessors//g;	
 	$avl_CPU_count=~s/\n//g;
 }
@@ -98,6 +100,30 @@ our $min_aa_len=50; #after translations
 #our $min_ntd_len=100;
 our $cd_hit_identity=60;
 our $chk_cdhit=1;
+
+##Check executable files in path
+
+
+
+## MAKING SCRIPT MORE INDEPENDANT
+print STDERR "File setting:\n";
+
+if(! -d $installation_path."/executables/"){ print STDERR "\t".$installation_path."/executables/ : directory Not found. Creating one."; mkdir  $installation_path."/executables/", 0755}
+if(! -d $installation_path."/local_dat/"){ print STDERR "\t".$installation_path."/local_dat/ : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/", 0755}
+if(! -d $installation_path."/local_dat/PATHOGENS"){ 
+print STDERR "\t".$installation_path."/local_dat/PATHOGENS : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PATHOGENS", 0755; 
+system ("..\\executables/sqlite3 ".win_path($installation_path."/local_dat/PATHOGENS").'\pathogen_taxonomy.db  "Create table taxonomy (	fasta_file VARCHAR(40) Primary Key,	ORG_CODE VARCHAR (10),	species VARCHAR (100),	TaxID INT(10),	SuperKingdom VARCHAR(50),	phylum VARCHAR(50),	class VARCHAR(50),	order_ VARCHAR(50),	family VARCHAR(50),	genus VARCHAR(50),	Description TEXT NULL);"');
+
+print STDERR "Add Pathogen genomes for broad-spectrum analysis using Utility menu\n";
+}
+if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR "\t".$installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755;system('echo >'.win_path("$installation_path/local_dat/drugTarget_db_names.txt"));}
+#if(! -d $installation_path."/local_dat/PPI"){ print STDERR "\t".$installation_path."/local_dat/PPI : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PPI", 0755}
+if(! -d $installation_path."/local_dat/GO"){ print STDERR "\t".$installation_path."/local_dat/GO : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/GO", 0755;
+system ("..\\executables/sqlite3 ".win_path($installation_path."/local_dat/GO").'\terms.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
+system ("..\\executables/sqlite3 ".win_path($installation_path."/local_dat/GO").'\terms.db "CREATE TABLE ecoli_go (	GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(10));"'); ##Check schema
+print STDERR "Add E.coli GO data for GO enrichment using Utility menu\n";
+
+}
 
 print STDERR "Reading drug Target data:";
 our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
@@ -120,7 +146,7 @@ our $ref_brd_sel_db_array=[]; ## array ref ; array saves  tax_levels sel by user
 our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
 print STDERR "DONE\n";
 
-our $database = win_path($installation_path."\\local_dat\\PPI\\PPI_sqlite3.db");
+##our $database = win_path($installation_path."\\local_dat\\PPI\\PPI_sqlite3.db");
 
 our $blast_prg1=0; 
 our $blast_prg2=0;
@@ -152,27 +178,24 @@ our $GO_db = $installation_path."/local_dat/GO/GO.db";		##contains two tables ec
 our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0);
 
 
+
+###Variables for subcellular localization
+##
+print STDERR "Checking Internet";
+if(check_internet()){ print STDERR ": Internet working\n";}
+else{print STDERR ": Internet NOT working, Subcellular localization cannot determined\n";}
+
+
 our	$brd_spec_chk=1;
 our	$drg_tar_blast_chk=1;
 our	$KEGG_chk=0;
 our	$sub_cel_loc_chk=0;
 
 
-
-
-
 my $about_text="The availability of complete genome sequences of pathogenic bacteria and their protein complements in public domain has made it possible to determine potential drug targets in these pathogens using computer-based in-silico techniques. Intersection of two datasets, namely \n\t(i)a pathogen's subtractive proteome dataset with the host proteome, and \n\t(ii) the pathogen's minimal essential protein dataset, should represent a set of proteins whose manipulation may reasonably be expected to interfere with the pathogen's survival without adversely affecting the host. These proteins could thus act as potential targets for drugs acting against the particular pathogen.\n\nThis program comes with ABSOLUTELY NO WARRANTY; for details http://www.gnu.org/licenses/.
 This is free software, and you are welcome to redistribute it under certain conditions.\n\n";
 my $citation_text="Sarangi AN et al., Exogeneous drug target identifiation tool.\nPMID:000000";
 
-## MAKING SCRIPT MORE INDEPENDANT
-
-if(! -d $installation_path."/executables/"){ print STDERR $installation_path."/executables/ : directory Not found. Creating one."; mkdir  $installation_path."/executables/", 0755}
-if(! -d $installation_path."/local_dat/"){ print STDERR $installation_path."/local_dat/ : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/", 0755}
-if(! -d $installation_path."/local_dat/PATHOGENS"){ print STDERR $installation_path."/local_dat/PATHOGENS : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PATHOGENS", 0755}
-if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR $installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755}
-if(! -d $installation_path."/local_dat/PPI"){ print STDERR $installation_path."/local_dat/PPI : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PPI", 0755}
-if(! -d $installation_path."/local_dat/GO"){ print STDERR $installation_path."/local_dat/GO : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/GO", 0755}
 
 
 if($filter_param_settings_file){
@@ -289,9 +312,9 @@ $dwn_str_anal->add_command(-label =>"Compare with known targets", -underline=>1,
 $dwn_str_anal->add_command(-label =>"GO analysis",-underline=>1, -command =>sub {});
 $dwn_str_anal->add_command(-label =>"Sub-cellular localization",-underline=>1, -command =>sub {});
 
-$utils->add_command(-label =>"Add pathogens for broadspectrum analysis", -underline=>5, -command =>\&add_to_broad_spectrum_db);
-$utils->add_command(-label =>"Add a drug taerget  database", -underline=>6, -command =>\&add_a_drug_target_db);
-$utils->add_command(-label =>"Create PPI mapping file", -underline=>6, -command =>\&util_PPI);
+$utils->add_command(-label =>"Add pathogens for broadspectrum analysis", -underline=>5, -command =>sub {});
+$utils->add_command(-label =>"Add a drug taerget  database", -underline=>6, -command =>sub {});
+$utils->add_command(-label =>"Create PPI mapping file", -underline=>6, -command =>sub {});
 
 
 $help->add_command(-label => "Manual",-underline=>0, -command =>\&manual);	
@@ -382,6 +405,7 @@ $save_options_but->g_grid(-column=>2, -row=>0,-sticky=>"e", -padx=>10);
 $dwn_str_anal->entryconfigure("Broadspectrum analysis", -command =>sub{ $frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); broad_spect_run(\$frnt,\$run_but); }); 
 $dwn_str_anal->entryconfigure("Compare with known targets", -command =>sub{ $frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); comp_known_DT(\$frnt,\$run_but); }); 
 $dwn_str_anal->entryconfigure("GO analysis", -command =>sub{ $frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); GO_analysis(\$frnt,\$run_but); }); 
+$dwn_str_anal->entryconfigure("Sub-cellular localization", -command =>sub {$frnt_top->g_destroy; $frnt->configure(-padding => "0 0 0 0"); subCellLoc_analysis(\$frnt,\$run_but); });
 
 Tkx::update();
 
@@ -616,6 +640,7 @@ sub main_script
 	
 ###do_PPI_search	
 	$do_PPI_search->configure(-command=>sub{
+	
 			if(!$PPI_id_map_file){
 				Tkx::tk___messageBox(-type => "ok",
 					-message => "Probably you forgot to load STRING mapping file.\n",
@@ -661,6 +686,8 @@ sub main_script
 			close P;
 			#print STDERR "Warning: no ppi found:".$#no_PPI_id_found+1;
 			#print STDERR "\nWarning:  ppi found:$ppi_found\n";
+			
+			my $database = $root_path."\\PPI_sqlite.db";
 						
 			open(S,">import.sql") or die "$!";
 			
@@ -695,7 +722,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 
 			my $g = Graph::Undirected->new(); # An undirected graph.
 			my $driver   = "SQLite";
-			my $dsn = "DBI:$driver:dbname=$database";
+			my $dsn = "DBI:$driver:dbname=".unix_path($database);
 			my $userid = "";
 			my $password = "";
 			my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
@@ -1580,7 +1607,7 @@ sub GO_analysis{
 				my @test_gene_set = (keys %{read_fasta_sequence(unix_path($input_seq))});
 				calc_GO_chi(\%background_go_CC,\@test_gene_set,$L_root_path."/GO_enrich_CC","GO enrichment : Cellular Componenet");
 				$GO_ana_progress=90; Tkx::update();
-								
+				
 				Tkx::image_create_photo( "BP", -file => $L_root_path."/GO_enrich_BP_enrich.gif");
 				$canvas1->create_image(250, 0, -image=>"BP", -anchor =>'n' );
 				Tkx::image_create_photo( "MF", -file => $L_root_path."/GO_enrich_MF_enrich.gif");
@@ -1699,25 +1726,173 @@ sub calc_GO_chi
 			fgclr =>"black",
 			boxclr=>"white",
 			transparent=>0,	
+			x_label_position =>1/2,
 			
 		);
-
+		my $win_root= get_windows_root_path('L');
+		$graph_chart->set_title_font("$win_root/Fonts/times.ttf",18);
+		$graph_chart->set_x_label_font("$win_root/Fonts/times.ttf",14);
+		$graph_chart->set_y_label_font("$win_root/Fonts/times.ttf",14);
+		$graph_chart->set_x_axis_font("$win_root/Fonts/times.ttf",12);
+		$graph_chart->set_y_axis_font("$win_root/Fonts/times.ttf",12);
+		
 		my $gd =$graph_chart-> plot(\@data) or die $graph_chart-> error;
 		my $export="$out_file\_enrich.gif";
 		open(IMG, ">$export") or die $!;
 		binmode IMG;
 		print IMG $gd->gif;
 		close IMG;
-
-	
-	
-	
-	
-	
-	
-
-
 }
+
+
+##ARGS:
+##returns:
+sub subCellLoc_analysis
+{
+	my $frm=shift;
+	my $run_button = shift;	
+	my $frm_top=$$frm->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 500,-padding => "0 0 0 0");
+	$frm_top->g_grid(-column=>0,-row=>0,-sticky=>"nswe");
+	my $status=(check_internet()?"Active internet": 'No internet');
+	Tkx::image_create_photo( "BANER", -file => "banner.gif");
+	($frm_top->new_ttk__label(-image=>'BANER'))->g_grid(-column=>0, -row=>0,-sticky=>"nwes",-columnspan=>2, -padx=>60);	
+	my $heading = $frm_top->new_ttk__label(-text=>"Exogeneous Drug Target Identification Tool",-justify=>"center",-foreground=>"blue",-font => "Helvetica 16 bold underline");
+	$heading->g_grid(-column=>0,-row=>0,-sticky=>"s",-padx=>50);
+	$frm_top->new_ttk__label(-text=>"SUBCELLULAR LOCALIZATION ANALYSIS",-justify=>"left",-foreground=>"darkgreen",-font => "Helvetica 12")->g_grid(-column=>0,-row=>1,-sticky=>"s",-padx=>0);
+	
+	my ($input_seq, $bacteria_strain);
+	$input_seq = ($Tproteome_file?"$L_root_path/accepted_seq_step-4_1.fasta":"");	##Skipp if project defined;
+			
+	my $new_frm = $frm_top->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 200,-padding => "0 0 50 0");
+	$new_frm->g_grid(-column=>0,-row=>2,-sticky=>"nswe");
+	$new_frm->new_ttk__label(-text=>"Choose bacteria strain")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
+	$new_frm->new_ttk__combobox(-textvariable => \$bacteria_strain, -values => "None positive negative")->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
+	$new_frm->new_ttk__label(-text=>"Input target sequences")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
+	$new_frm->new_ttk__label(-text=>"Output folder")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
+	
+	$new_frm ->new_ttk__entry(-textvariable => \$input_seq,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
+	$new_frm ->new_ttk__entry(-textvariable => \$root_path,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2);
+		
+	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+	$input_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
+	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
+	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
+	
+	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
+		if(!$root_path){$root_path=$L_root_path;}  							##if cancel pressed ; fail safe
+		$L_root_path=$root_path;													##preserve UNIX format
+		$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");	
+	
+	$new_frm->new_ttk__label(-text=>"Progress:")->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw");
+	#my $prg=$new_frm->new_ttk__progressbar(-orient => 'horizontal', -value=>0, -length=>100,-mode => 'indeterminate');
+	#$prg->g_grid(-column=>1,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw");
+	$new_frm->new_ttk__label(-text=>"",-foreground=>"red",-justify=>"right", -textvariable =>\$status)->g_grid(-column=>2,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw", -columnspan=>2);
+	
+	my $canvas1 = $new_frm->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>400, -height=>250);
+	$canvas1->g_grid(-column=>0, -row=>5, -padx=>5, -pady=>1,-sticky=>"nw",-columnspan=>5);
+	my $hscroll1 = $new_frm->new_tk__scrollbar(-orient => "horizontal", -command => [$canvas1, "xview"]);
+	my $vscroll1 = $new_frm->new_tk__scrollbar(-orient => "vertical", -command => [$canvas1, "yview"]);
+	$hscroll1->g_grid(-column => 0, -row => 6, -sticky => "we",-columnspan=>5);
+	$vscroll1->g_grid(-column => 5, -row => 5, -sticky => "ns");
+	$new_frm->new_ttk__sizegrip()->g_grid(-column => 5, -row => 6, -sticky => "se");
+	$canvas1->configure(-yscrollcommand => [$vscroll1, "set"], -xscrollcommand => [$hscroll1, "set"]);				
+				
+	
+	
+	
+	
+	$$run_button->configure(-state=>"normal", -command =>sub {
+			if(!$bacteria_strain || !$input_seq){ Tkx::tk___messageBox(-message => "Inputs not found!! "); 		return 0;}
+			if($status eq 'No internet'){ Tkx::tk___messageBox(-message => "Check internet connection "); 		return 0;}
+			$$run_button->configure(-state=>"disabled");
+			
+			my $size = -s unix_path($input_seq); #print "Size=$size\n";
+			#my $all_inp_seq = read_fasta_sequence(unix_path($input_seq)); ## each seq assuming 2000bytes * 30 =60000
+			#my @split_file; my @all_ids= keys %$all_inp_seq;
+			#if(scalar (keys %$all_inp_seq)>30){  
+			#	my $f = int (scalar (keys %$all_inp_seq)/30); $f=(scalar (keys %$all_inp_seq)%3==0?$f:$f+1);
+			#	for (my  $h=0; $h<$f;$h++)
+			#	{
+			#		my @ids= splice(@all_ids,30*$h,30);
+			#		my $r=fetch_seq_by_id($all_inp_seq,\@ids);	##
+			#		write_fasta_seq($r,"$L_root_path/sub_file.txt");
+			#		psort_subcell($bacteria_strain, "$L_root_path/sub_file.txt", "$L_root_path/psort_subcellular_loc_result.txt");
+			#		$status="$h/$f processed";
+			#		Tkx::update();
+			#	}
+				
+			#}
+			#else{
+			#psort_subcell($bacteria_strain, unix_path($input_seq), "$L_root_path/psort_subcellular_loc_result.txt",\$status);
+			#}
+			
+			Tkx::update();
+			
+			my %distribution;
+			my $formated_op="$L_root_path/psort_subcellular_loc_final_result.txt";
+			open(O, "<$L_root_path/psort_subcellular_loc_result.txt") or die"$! $L_root_path/psort_subcellular_loc_result.txt\n";
+			open(F, "> $formated_op") or die"$! $formated_op\n";
+			print F "SeqID	Localization	Score\n";
+			while(<O>){
+				chomp;
+				if(/^(SeqID)|^$/){ next;}
+				else{ 
+					my @l =split /\t/,$_; 
+					next if scalar @l <2;
+					$distribution{$l[-2]}=[] if !$distribution{$l[-2]};
+					if($l[0]=~m/(\S+)/g){$l[0]=$1};
+					push @{$distribution{$l[-2]}},$l[0] ;
+					$"="\t";
+					print F "@l\n";
+				}			
+			}
+			close F; close O;
+			my @categories=keys %distribution;
+			my @freq; foreach (@categories) {push @freq, scalar @{$distribution{$_}};}
+			my @data =(\@categories,\@freq);
+
+			my $graph_chart = GD::Graph::bars->new(600,600);
+			
+			$graph_chart-> set (
+				x_label=> 'Categories',
+				y_label=> "Frequency ",
+				title=> 'Subcellular localization analysis',
+				bar_spacing=>1,
+				correct_width=>1,
+				bgclr=>"white",
+				accentclr=>"white",
+				labelclr=>"black",
+				axislabelclr=>"black",
+				borderclrs=>"black",
+				fgclr =>"black",
+				boxclr=>"white",
+				transparent=>0,	
+				x_label_position =>1/2,
+				x_labels_vertical=>1,
+			);
+			my $win_root= get_windows_root_path('L');
+			$graph_chart->set_title_font("$win_root/Fonts/times.ttf",18);
+			$graph_chart->set_x_label_font("$win_root/Fonts/times.ttf",14);
+			$graph_chart->set_y_label_font("$win_root/Fonts/times.ttf",14);
+			$graph_chart->set_x_axis_font("$win_root/Fonts/times.ttf",12);
+			$graph_chart->set_y_axis_font("$win_root/Fonts/times.ttf",12);
+
+			my $gd =$graph_chart-> plot(\@data) or die $graph_chart-> error;
+			my $export="$L_root_path/Subcellular_enrich.gif";
+			open(IMG, ">$export") or die $!;
+			binmode IMG;
+			print IMG $gd->gif;
+			close IMG;	
+				Tkx::image_create_photo( "BP", -file => $L_root_path."/Subcellular_enrich.gif");
+				$canvas1->create_image(400, 0, -image=>"BP", -anchor =>'n' );
+		});		
+}
+
+
+
 
 ##Args: a,b,c,d
 ##Return: Chi-square value (Yates-correction applied)
@@ -1804,6 +1979,41 @@ sub compare_two_fasta_file{
 	undef $a; undef $b;	
 	my $m = sprintf("%4.1f",($a_mat/$a_tot)*100);
 	return ($m,\@m);
+}
+
+
+##Args; positive/negative, input_se_path_unix, outfile_path_(unix)_appends, status_ref_var
+##return :
+sub psort_subcell
+{
+	my $bacteria_strain=shift;
+	my $input_seq=shift;
+	my $outFile= shift;
+	my $status =shift || 0;
+	
+			my $psort_url = 'http://www.psort.org/psortb/results.pl';
+			my $browser = LWP::UserAgent->new;
+			
+			my $response = $browser->request(
+			POST "$psort_url",
+			Content_Type => 'form-data',
+			Content => [
+			'organism'=>'bacteria',
+			'gram'=>$bacteria_strain,							#'positive',				#'negative',
+			'advancedgram'=>'none',			
+			'format'=>'terse',
+			'sendresults'=>'display',
+			'email'=>'',
+			'seqs'=>'',				#$fas,
+			'filename'=>[unix_path($input_seq)]
+			]);
+			if ($response->is_error || $response->content=~m/One or more errors occurred while processing your request/g) {$$status="ERROR in Analysis" if $status; }
+			else {
+			open (O, ">>$outFile")or die"$! outFile"; 
+			print O $response->content;
+			close O; $$status="DONE" if $status;
+			}	
+
 }
 
 
@@ -2184,8 +2394,7 @@ sub down_str_anal
 			if(scalar@idx ==1){@sel=()}						## fix if a single is clicked
 			foreach my $u(@idx){push @sel,@{$sel_entries}[$u];}
 			$ref_brd_sel_db_array=\@sel;
-			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
-	
+			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");	
 		});	
 	
 	
@@ -2224,6 +2433,9 @@ sub down_str_anal
 		$crt_win->g_destroy();
 		})->g_grid(-column=>0,-row=>30,-padx=>1,-pady=>5,-sticky=>"ne");	
 }
+
+
+
 
 ##Args:
 ##returns:
@@ -2705,6 +2917,19 @@ if(uc($os) eq 'L'){$p=~s/\\/\//g; return $p;}
 else{$p = '"'.$p.'"'; return "$p";}
 }
 
+##Args: optionally 'L'/'W': default is windows format
+##returns: path of C:\windows OS specific; windows; 'echo %SystemRoot%'
+sub get_windows_root_path
+{
+my $os=shift || 'W';
+my $p=`echo %SystemRoot%`;
+chomp($p);
+if(uc($os) eq 'L'){$p=~s/\\/\//g; return $p;}
+else{$p = '"'.$p.'"'; return "$p";}
+}
+
+
+
 ##Args: Win formated path; STRING ("C:\\Users\\SGPGI.SGPGI-PC\\KANHU\\EDIT\\Prev_data";)
 ##returns: Unix formated path string (C:/Users/SGPGI.SGPGI-PC/KANHU/EDIT/Prev_data)
 sub unix_path
@@ -2728,257 +2953,16 @@ sub win_path
 }
 
 
-#ARGS:
-#Return:
-sub util_PPI
+##ARgs:
+##return:0/1'
+sub check_internet
 {
-
-	my $crt_win =$mw->new_toplevel();
-	$crt_win->g_wm_title("Utility:Create PPI inputs");
-	#$mw->configure(-cursor=>"watch");
-	$crt_win->g_wm_attributes (-topmost=>1);
-	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
-	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
-	
-	my ($pathogen_seq, $PPI_seq, $PPI_interaction,$output_dir,$total_seq_count);
-	$frm1->new_ttk__label(-text=>"Pathogen proteome")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"PPI proteome sequnnce")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");	
-	$frm1->new_ttk__label(-text=>"PPI interction file")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"Output directory")->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw");
-	
-	
-	
-	$frm1 ->new_ttk__entry(-textvariable => \$pathogen_seq,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$PPI_seq,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$PPI_interaction,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$output_dir,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>3,-padx=>2,-pady=>1,-columnspan=>2);
-		
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$pathogen_seq = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	$total_seq_count =count_fasta_seq($pathogen_seq) if $pathogen_seq; 							## reset drug target counts; not called if in project call
-	$pathogen_seq=win_path($pathogen_seq) if $pathogen_seq; 							##Convert to windows format
-	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$PPI_seq = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	$PPI_seq=win_path($PPI_seq) if $PPI_seq; 							##Convert to windows format
-	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$PPI_interaction = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
-	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-		$output_dir = Tkx::tk___chooseDirectory(-parent=>$crt_win);
-		$output_dir = win_path($output_dir) if $output_dir;
-		
-	})->g_grid(-column=>4,-row=>3,-padx=>2,-pady=>1,-sticky=>"wn");	
-	
-	my $PPI_blast_prg=0;
-	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-	
-		if ((!$pathogen_seq|| !$PPI_seq) || (!$PPI_interaction||!$output_dir)){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&util_PPI(); return 0;}
-		## perform a blast to find one-to-one realation
-		##create the id mapping file
-		## create non-reduntant comma separated PPI file.
-		$PPI_blast_prg=5;
-		if(!-e unix_path($PPI_seq).".pin") { system(win_path($installation_path)."\\executables\\formatdb.exe -p T -i ".$PPI_seq);}
-		system(win_path($installation_path)."\\executables\\blastall.exe -p blastp -d $PPI_seq -i $pathogen_seq -m 8 -W 7 -b 1 -a $use_cores -o $output_dir\\PPI_blast.out");
-		$PPI_blast_prg=50;	Tkx::update(); 
-		
-		my $mapped_hash = process_GO_BLAST_out(unix_path($output_dir."\\PPI_blast.out"),98);
-		$PPI_blast_prg=55;	Tkx::update(); 
-		
-		open (O,">",unix_path($output_dir)."/PPI_ID_mapped.txt") or die "$! ".unix_path($output_dir)."/PPI_ID_mapped.txt";
-		foreach (keys %$mapped_hash) {print O "$_\t$mapped_hash->{$_}\n"}
-		close O;
-		$PPI_blast_prg=80;	Tkx::update(); 
-		
-		open (P,"<$PPI_interaction") or die "$! $PPI_interaction";
-		my %PPI_hash;
-		while(<P>){ chomp; my ($A,$B,$score)=split /\s+/,$_; if(!$PPI_hash{$A."*".$B} and !$PPI_hash{$B."*".$A}){$PPI_hash{$A."*".$B} = $score}; }
-		close P;
-		$PPI_blast_prg=95;	Tkx::update(); 
-		open (O,">",unix_path($output_dir)."/PPI_ID_mapped.txt") or die "$! ".unix_path($output_dir)."/PPI_ID_mapped.txt";
-		foreach (keys %PPI_hash) { my ($A,$B)=split /\*/,$_; print O "$A,$B,$PPI_hash{$_}\n";}
-		close O;
-		$PPI_blast_prg=100;	Tkx::update(); 
-		
-		$crt_win->g_destroy();	
-	});
-	$run_but->g_grid(-column=>0, -row=>6,-padx=>5,-sticky=>"w");
-	my $PPI_blast=$frm1->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$PPI_blast_prg);
-	$PPI_blast -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
+my $status=0;
+my $ping=`ping -n 1 www.microsoft.com`;
+chomp($ping);
+my $status = scalar (split /\n/,$ping)-1;
+#print STDERR $status;
+return $status;
 }
-
-
-
-sub add_to_broad_spectrum_db
-{
-	my $crt_win =$mw->new_toplevel();
-	$crt_win->g_wm_title("Utility:add pathogen(s) to broadspectrum db");
-	#$mw->configure(-cursor=>"watch");
-	$crt_win->g_wm_attributes (-topmost=>1);
-	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
-	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
-	
-	
-	my ($taxonomy_file, $fasta_dir);
-	$frm1->new_ttk__label(-text=>"Taxonomy file")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"Directory containing FASTA files")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
-	
-	$frm1 ->new_ttk__entry(-textvariable => \$taxonomy_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$fasta_dir,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
-	
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$taxonomy_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
-	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-		$fasta_dir = Tkx::tk___chooseDirectory(-parent=>$crt_win);
-		$fasta_dir = win_path($fasta_dir) if $fasta_dir;		
-	})->g_grid(-column=>4,-row=>1,-padx=>1,-pady=>1,-sticky=>"wn");	
-	
-	my $brd_proc_prg=0; my $c=0;
-	my $total_lines =0; 
-	$total_lines = int `findstr /R /N "^" $taxonomy_file | find /C ":"`  if $taxonomy_file; 
-	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-	
-		if (!$taxonomy_file || $fasta_dir){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&add_to_broad_spectrum_db(); return 0;}
-	
-		my $BLAST_DB_DIR='PATHOGEN';
-		my $database = $installation_path.'/local_dat/pathogen_taxonomy.db';
-		
-		open (T, "< $taxonomy_file") or die "$! $taxonomy_file";
-		while(<T>){
-			chomp;
-			next if /^#/;
-			my @l=split /\t/,$_;
-			if(!(-e unix_path($fasta_dir."\\$l[1]"))) { warn unix_path($fasta_dir."\\$l[1]"),"$fasta_dir\\$l[1] FASTA file for $l[0] Not found. Skip\n"; next;}
-			system ("copy $fasta_dir\\$l[1] PATHOGEN\ ");
-			system (win_path($installation_path)."\\executables\\formatdb.exe -p T -i $BLAST_DB_DIR\\$l[1]");
-			if (scalar @l <5) {warn "insufficient columns in line @l\nSkip.."; next;}
-			$l[5]=~s/'/`/g;
-		 my ($SuperKingdom,$phylum, $class, $order, $family, $genus) = split /;\s*/,$l[3];
-		 my $sql = "INSERT INTO taxonomy (fasta_file, ORG_CODE,species,TaxID,SuperKingdom,phylum, class, order_, family, genus, Description) VALUES ('$l[1]','$l[0]','$l[2]',$l[4],'$SuperKingdom','$phylum', '$class', '$order', '$family', '$genus','$l[5]' )";	
-		# print "$sql\n";
-					my $driver   = "SQLite";
-					my $dsn = "DBI:$driver:dbname=$database";
-					my $userid = "";
-					my $password = "";
-					my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
-					my $rv = $dbh->do($sql) or sub {warn "$l[0] : ",$DBI::errstr; next;};	
-		$brd_proc_prg=(++$c/$total_lines)*100;	Tkx::update(); 	
-		}
-		close T;
-		$crt_win->g_destroy();	
-	
-	});
-	$run_but->g_grid(-column=>0, -row=>6,-padx=>5,-sticky=>"w");
-	my $brd_sp_add=$frm1->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$brd_proc_prg);
-	$brd_sp_add -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
-
-
-}
-
-
-sub add_a_drug_target_db
-{
-
-	my $crt_win =$mw->new_toplevel();
-	$crt_win->g_wm_title("Utility:add known drug-target database");
-	#$mw->configure(-cursor=>"watch");
-	$crt_win->g_wm_attributes (-topmost=>1);
-	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
-	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
-	
-	
-	my ($drug_targ_seq_file, $annot_file,$prefix);
-	$frm1->new_ttk__label(-text=>"Drug-target FASTA sequence file")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"Drug-target annotation file")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"Drug-target Name")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
-	
-	$frm1 ->new_ttk__entry(-textvariable => \$drug_targ_seq_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$annot_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$prefix,-width=>30,)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2,-sticky=>"wn");
-	
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$drug_targ_seq_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
-	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$annot_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
-	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	my $drg_tar_prg=0; my $c=0;
-	
-	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-			if ((!$drug_targ_seq_file || $annot_file)|| !$prefix){ Tkx::tk___messageBox(-message => "ERROR: Input file missing");  $crt_win->g_destroy();	\&add_a_drug_target_db(); return 0;}
-	
-		my $BLAST_DB_DIR='KNOWN_DRUG_TARGETS';
-		my $database = 'drugTarget_db_names.txt';
-		
-		my %annot_seq_id;
-		my $all_seq=read_fasta_sequence($drug_targ_seq_file);
-		my $seq_no_annot=0;
-		open(S,"<$drug_targ_seq_file") or die "$! $drug_targ_seq_file\n";
-			while(<S>){	if(/^>(\S+)/g){ $annot_seq_id{$1}=1;}}
-		close S;	
-		$drg_tar_prg=10;Tkx::update(); 
-		open(A,"<$annot_file") or die "$! $annot_file\n";
-		my $annots_no_seq_data=0;
-		my @annotations_with_seq_data;
-		while(<A>){	
-			chomp;
-			next if(/^#/ or !$_);
-			my $l=$_;
-			my @l=split /\t/,$l;
-			if($annot_seq_id{$l[0]}){ $annot_seq_id{$l[0]}=$l; push @annotations_with_seq_data,$l; }
-			else{$annots_no_seq_data++}
-
-
-		}
-		close A;	
-		$drg_tar_prg=20;Tkx::update(); 
-		my @seq_id_with_all_annotations;
-		foreach my $t(keys %annot_seq_id)
-		{ 
-			if (!$annot_seq_id{$t})
-			{
-			$seq_no_annot++;
-			}
-			else{push @seq_id_with_all_annotations,$t;}
-		}
-		$drg_tar_prg=50;Tkx::update(); 
-		print STDERR "sequences with no annotation: $seq_no_annot\nAnnotations with no sequence data: $annots_no_seq_data\n";
-
-		my $r=fetch_seq_by_id($all_seq,\@seq_id_with_all_annotations);
-		write_fasta_seq($r,"$installation_path/local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
-		$drg_tar_prg=55;Tkx::update(); 
-		open(F,">> $installation_path/local_dat/$BLAST_DB_DIR/$prefix\_targets_annot.txt") or die "$! $installation_path/local_dat/$BLAST_DB_DIR/$prefix\_targets_annot.txt";
-		$"="\n";
-		print F "@annotations_with_seq_data";
-		close F;
-		$drg_tar_prg=70;Tkx::update(); 
-		open(F,">> $installation_path/local_dat/$BLAST_DB_DIR/$database") or die "$! $installation_path/local_dat/$BLAST_DB_DIR/$database";
-		$"="\n";
-		print F "$prefix\n";
-		close F;
-		$drg_tar_prg=90;Tkx::update(); 
-		print STDERR (scalar @seq_id_with_all_annotations -$annots_no_seq_data)." records imported sucessfully\n";
-		system (win_path($installation_path)."\\executables\\formatdb.exe -p T -i ".win_path("$installation_path/local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta"));
-		$drg_tar_prg=100;Tkx::update(); 
-		$crt_win->g_destroy();	
-	
-	});
-	$run_but->g_grid(-column=>0, -row=>6,-padx=>5,-sticky=>"w");
-	my $drg_tar_add=$frm1->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$drg_tar_prg);
-	$drg_tar_add -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
-}
-
-
 
 Tkx::MainLoop();
