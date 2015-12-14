@@ -60,10 +60,10 @@ Following modules are need to be installed
  - [x] MS Word Documnet
  - [ ] PDF Doc
  - [ ] HTML version
- - [ ] OS dependancy
-  - [ ] Windows Version
-  - [ ] Unix Version
- - [ ] External binary executables on PATH
+- [ ] OS dependancy
+ - [ ] Windows Version
+ - [ ] Unix Version
+- [ ] External binary executables on PATH
  
 
 
