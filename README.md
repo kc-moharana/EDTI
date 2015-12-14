@@ -36,6 +36,7 @@ Following modules are need to be installed
 * Mon, Dec 07, 2015 12:13:11 PM : few path issues corrected
 * Fri, Dec 11, 2015  4:22:00 PM : GO enrichment analysis added
 * Fri, Dec 12, 2015  12:30:03 AM : Utilities menu added;
+* Fri, Dec 14, 2015  10:45:03 PM : Sub-cellular localization;pSORT web-based added;
 
 ## Futures supported/proposed
 - [ ] Single project should contain all outputs
