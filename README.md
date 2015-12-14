@@ -42,6 +42,7 @@ Following modules are need to be installed
   - [x] Import all inputs to create a single project
   - [x] All outputs in the same project
   - [ ] Import a runned project to rerun a uncomplete task
+  - [ ] Single sciprt must be sufficient to use
 - [x] Putative Bactrial Drug targets
  - [x] Single-copy genes (CD-hit) + Non-host proteins(BLAST) + Essntial proteins (BLAST vs DEG)
  - [x] Single-copy genes (CD-hit) + Non-host proteins (BLAST) + Hub genes via Protein-protein interaction analysis (STRING)
@@ -50,7 +51,7 @@ Following modules are need to be installed
  - [x] Compare against Known target databases
  - [x] Gene Ontology Enrichment
  - [ ] Pathway enrichment
- - [ ] Sub-cellular localization prediction
+ - [x] Sub-cellular localization prediction
 - [ ] Utility to create inputs
  - [x] create PPI networks from STRING dataset
  - [x] Create Drug traget database
@@ -59,6 +60,11 @@ Following modules are need to be installed
  - [x] MS Word Documnet
  - [ ] PDF Doc
  - [ ] HTML version
+ - [ ] OS dependancy
+  - [ ] Windows Version
+  - [ ] Unix Version
+ - [ ] External binary executables on PATH
+ 
 
 
 
