@@ -38,6 +38,8 @@ Following modules are need to be installed
 * Sat, Dec 12, 2015  12:30:03 AM : Utilities menu added;
 * Mon, Dec 14, 2015  10:45:00 PM : Sub-cellular localization;pSORT web-based added;
 * Tue, Dec 15, 2015  17:07:33 PM : GO enrich add datababase Utility;
+* Wed, Dec 16, 2015  02:11:53 AM : Executables in ENV PATH; NCBI tax id added; code fix update
+
 
 ## Futures supported/proposed
 - [ ] Single project should contain all outputs
