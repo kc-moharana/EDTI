@@ -10,10 +10,10 @@ use Cwd;
 use DBI;
 use Graph;
 use Graph::Undirected;
-use File::Copy qw(copy);
-use File::Which;
 use LWP::UserAgent;
 use HTTP::Request::Common;
+use File::Copy qw(copy);
+use Compress::Zlib;
 use constant PI => 3.1415926536;
 use constant SIGNIFICANT => 5; 		# number of significant digits to be returned
 
@@ -124,10 +124,11 @@ print STDERR "Add Pathogen complete proteomes for broad-spectrum analysis using 
 if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR "\t".$installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755;system('echo >'.win_path("$installation_path/local_dat/drugTarget_db_names.txt"));}
 #if(! -d $installation_path."/local_dat/PPI"){ print STDERR "\t".$installation_path."/local_dat/PPI : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PPI", 0755}
 if(! -d $installation_path."/local_dat/GO"){ print STDERR "\t".$installation_path."/local_dat/GO : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/GO", 0755;
-system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/GO").'\terms.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
-system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/GO").'\terms.db "CREATE TABLE ecoli_go (	GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(8));"'); 
-print STDERR "Add E.coli GO data for GO enrichment using Utility menu\n\n\n";
+system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
+system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE ecoli_go (	GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(8));"'); 
+#print STDERR "Add E.coli GO data for GO enrichment using Utility menu\n\n\n";
 }
+
 
 print STDERR "Reading drug Target data:";
 our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
@@ -180,7 +181,7 @@ our $model_org_ref_proteome = win_path($installation_path."\\local_dat\\GO\\UP00
 our $GO_db = $installation_path."/local_dat/GO/GO.db";		##contains two tables ecoli_go, go_terms
 #our $model_org_ref_proteome_GO = process_GO_db($installation_path."/local_dat/GO/UP000000625_83333.GO.txt");		##E.coli is used as refernce for all ontology analaysis ; stores ref hash
 our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0);
-
+chk_GO_db();		##Checking GO data in tables;
 
 
 ###Variables for subcellular localization
@@ -318,6 +319,7 @@ $dwn_str_anal->add_command(-label =>"Sub-cellular localization",-underline=>1, -
 
 $utils->add_command(-label =>"Add pathogens for broadspectrum analysis", -underline=>5, -command =>\&add_to_broad_spectrum_db);
 $utils->add_command(-label =>"Add a drug taerget  database", -underline=>6, -command =>\&add_a_drug_target_db);
+$utils->add_command(-label =>"Add Ontology database", -underline=>6, -command =>\&add_ecoli_go_db);
 $utils->add_command(-label =>"Create PPI mapping file", -underline=>6, -command =>\&util_PPI);
 
 
@@ -2705,25 +2707,6 @@ sub add_a_drug_target_db
 	$drg_tar_add -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ##Args:
 ##returns:
 sub fetch_tax_names
@@ -2752,6 +2735,11 @@ sub create_broad_spe_db_array
 	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
 	my @l = split /\n/,$l;
 	
+	if($#l<0){
+	print STDERR "ERROR: No pathogen proteome found while reading data for Broad-spectrum analysis\n. Add Few using Utility menu\n";
+	print STDERR "press any  key to exit...\n"; <STDIN>; exit(1);
+	}
+	
 	my @db;
 	foreach(@l)
 	{
@@ -2765,7 +2753,35 @@ sub create_broad_spe_db_array
 	return $db_list;
 }
 
-##ARgs: go_id, sqlite_database_handle
+##ARGS:
+##returns
+sub chk_GO_db
+{
+	my $driver   = "SQLite";
+	my $dsn = "DBI:$driver:dbname=$GO_db";
+	my $userid = "";
+	my $password = "";
+	my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
+	or die $DBI::errstr;
+
+	my $stmt = qq(SELECT COUNT(*) FROM go_term;);	#
+	my $sth = $dbh->prepare($stmt);
+	$sth->execute(); my $r = $sth->fetch()->[0];
+	if($r<1){
+	print STDERR "ERROR: No GO annotation found while reading data for go_term table\n. Add Few using Utility menu\n";
+	print STDERR "press any  key to exit...\n"; <STDIN>; exit(1);
+	}
+	
+	my $stmt = qq(SELECT  COUNT(*) FROM ecoli_go;);	#
+	my $sth = $dbh->prepare($stmt);
+	$sth->execute(); my $r = $sth->fetch()->[0];
+	if($r<1){
+	print STDERR "ERROR: No E.coli GO annotation found while reading data for ecoli_go table \n. Add Few using Utility menu\n";
+	print STDERR "press any  key to exit...\n"; <STDIN>; exit(1);
+	}
+}
+
+##ARgs: go_id
 ##Returns: ref to a hash
 #ecoli_go  go_term
 #SELECT go_term.ontology_category, go_term.term. ecoli_go.go_id FROM go_term LEFT JOIN ecoli_go ON #go_term.go_id=ecoli_go.go_id WHERE ecoli_go.ecoli_ac = "P0A6A8";
@@ -3251,5 +3267,139 @@ my $status = scalar (split /\n/,$ping)-1;
 #print STDERR $status;
 return $status;
 }
+
+
+##ARGS
+##returns:
+sub add_ecoli_go_db
+{
+
+	my $crt_win =$mw->new_toplevel();
+	$crt_win->g_wm_title("Utility: add GO enrichment database");
+	#$mw->configure(-cursor=>"watch");
+	$crt_win->g_wm_attributes (-topmost=>1);
+	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
+	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
+	
+	
+	my ($tax_id,$format,$term_file,$status)= (83333,'uniprot', 'term.txt'.'');
+	my (@ids, %GO);
+	$frm1->new_ttk__label(-text=>"Reference bacterial taxonomic ID")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
+	$frm1->new_ttk__label(-text=>"GO annotation cross-reference database")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
+	$frm1->new_ttk__label(-text=>"Gene Consortitium term file")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
+	
+	$frm1 ->new_ttk__entry(-textvariable => \$tax_id,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
+	$frm1 ->new_ttk__entry(-textvariable => \$format,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
+	$frm1 ->new_ttk__entry(-textvariable => \$term_file,-width=>30,)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2,-sticky=>"wn");
+	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+	$term_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
+	
+	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");
+	
+	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
+			if (!$term_file ){ Tkx::tk___messageBox(-message => "ERROR: Input file missing.Plese refer to manual.");  $crt_win->g_destroy();	\&add_ecoli_go_db(); return 0;}
+		my $model_org_fasta= 'ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Bacteria/UP000000625_83333.fasta.gz';
+		$status='download: E.coli proteome'; Tkx::update();
+		my $data   = get($model_org_fasta);
+		if (!$data) {  $status='download: proteome download failed'; die "UP000000625_83333.fasta.gz download failed\n";}
+		open(OUT, '> local_dat/GO/UP000000625_83333_1.fasta') or die "$!";
+		binmode OUT;
+		print OUT $data;
+		close(OUT);
+		sleep 1;
+		my $fasta_file='local_dat/GO/UP000000625_83333_1.fasta';
+		$status='formatdb.exe'; Tkx::update();
+		system ("executables\\formatdb.exe -p T -i local_dat\\GO\\UP000000625_83333_1.fasta");
+				
+		open (F,"<$fasta_file") or die "$! $fasta_file\n";
+		if($format eq 'uniprot'){
+		#>sp|A5A605|YKFM_ECOLI Uncharacterized protein YkfM OS=Escherichia coli (strain K12) GN=ykfM PE=4 SV=1
+			while(<F>)
+			{
+				chomp;
+				if(/^>\w+\|(\S+)\|\w+\s+/){push @ids,$1; }
+			}
+		}
+		close F;
+		print STDERR "$fasta_file Fasta done\nTax id: $tax_id\n";
+		print STDERR "Fetching GO ids from Uniprot\n";
+		print STDERR "\n";
+		$status=sprintf "0/%d",scalar@ids;Tkx::update();
+		my $driver   = "SQLite";
+		my $dsn = "DBI:$driver:dbname=local_dat/GO/GO.db";
+		my $userid = "";
+		my $password = "";
+		my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
+		my $stmt = qq(DELETE FROM ecoli_go;);	#
+		my $rv = $dbh->do($stmt) or die $DBI::errstr;
+		$status=sprintf "0/%d",scalar@ids;Tkx::update();
+		foreach my $i (0..$#ids)
+		{		
+			my $g = fetch_go_uniprot($ids[$i],$tax_id);		
+			if($g=='ERROR') {warn "No GO id fround for $ids[$i]. Skip.. \n";}
+			else{		
+				my @go = @{$g}; shift @go;
+				foreach my $r(@go)
+				{
+					my $stmt = qq(INSERT INTO ecoli_go (go_id,ecoli_ac) VALUES ('$r','$ids[$i]'););	#
+					my $rv = $dbh->do($stmt) or die $DBI::errstr;
+					$i++;	
+					$status=sprintf "%d/%d",$i,scalar@ids;Tkx::update();
+				}		
+			}		
+		}
+		
+		die "No $term_file" if (!$term_file || !-e $term_file);
+		my $stmt = qq(DELETE FROM go_term;);	#
+		my $rv = $dbh->do($stmt) or die $DBI::errstr;
+		$status='Adding data to go_term';Tkx::update();
+		open (I, "<$term_file") or die "$! $term_file";
+		while(<I>){
+		chomp;
+		my @l=split /\t/,$_;
+		if($l[3]=~m/^GO\:\d{7}/g){
+			my $stmt = qq(INSERT INTO go_term (GO_id,ontology_category,term) VALUES (\"$l[3]\",\"$l[2]\",\"$l[1]\"););	
+			my $rv = $dbh->do($stmt) or die $DBI::errstr;
+		}
+		else{warn "No GO id found\n Skipping @l\n"}
+		}
+		close I;	
+	});		
+	
+	$run_but->g_grid(-column=>0,-row=>8,-padx=>2,-pady=>1,-sticky=>"wn");
+	$frm1->new_ttk__label(-textvariable=>\$status)->g_grid(-column=>0,-row=>9,-padx=>2,-pady=>5,-sticky=>"nw");
+	$status=(check_internet()?"Active internet": 'No internet'); Tkx::update();
+}
+
+
+
+
+#fetch_go_uniprot('P10408','83333');
+
+sub fetch_go_uniprot
+{
+my $uniprot_id=shift;
+my $org_id =shift;
+	my $url ='http://www.uniprot.org/uniprot/?query=accession:'.$uniprot_id.'+AND+organism:'.$org_id.'&format=tab&columns=id,go-id';
+	my $content = get $url;
+#	die "Couldn't get $url" unless defined $content;
+	if(!$content || $content =~m/^400/g) {
+		print STDERR "Bad request. There is a problem with your input.\n";
+		return 'ERROR';
+	  } 
+	  else {
+		#print "$content\n";
+		my ($t,$go)=split /\n/,$content;
+		my @g = split /;\s*/,$go;
+		return \@g;
+	}
+	
+}
+
+
+
+
+
+
 
 Tkx::MainLoop();
