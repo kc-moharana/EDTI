@@ -8,12 +8,12 @@ Tkx::package_require("BWidget");
 #Tkx::namespace_import("::tooltip::tooltip");
 use Cwd;
 use DBI;
-use Graph;
-use Graph::Undirected;
+#use Graph;
+#use Graph::Undirected;
+use LWP::Simple;
 use LWP::UserAgent;
 use HTTP::Request::Common;
 use File::Copy qw(copy);
-use Compress::Zlib;
 use constant PI => 3.1415926536;
 use constant SIGNIFICANT => 5; 		# number of significant digits to be returned
 
@@ -42,42 +42,125 @@ print STDERR "
 ############################
 #  GLOBAL VARIABLES       ##
 ############################
-
-
-
-
 our $Tproteome_file;	## Target proteome aa sequence; FASTA format
 our $Hproteome_file;	## Host proteome aa sequence; FASTA format
 our $Eproteome_file;	## Essential proteome aa sequence; FASTA format
 our $PPI_id_map_file; 	## Sequence id mapped to STRING id
 our $interactome_file;	## Interaction file , atleast three columns,ProteinA-ProteinB-Score
+our ($skip_cdHit,$skip_host_BLAST)=(0,0);	## Trun on if want to skip steps
 our $taxon_id;			## NCBI taxon id; trash
 
 our $project_name="New_Project";	
 our $root_path=	get_my_document_path();		#getcwd();##update later
-$root_path=~s/\//\\\\/g;					##Win formated
-#our $prog_install_path=getcwd();			
 our $L_root_path = get_my_document_path('L');	## keeping an extra variable; storing path in Unix format
 our $installation_path=getcwd();			##dont update; essential data files and folders;
-#$installation_path=~s/\//\\\\/g;
-our $last_update="14 Dec 2015";
+our $last_update="15 Dec 2015";
 
 our $front_page_status="File > Create a new project. ";
 our $filter_param_settings_file;						#$root_path."/param.txt";
 print STDERR "Intallation path:$installation_path\n";
-our $read_seq_prg=0;
-our $cdhit_prg=0;
-our $remove_short_seq_prg=0;
-our $string_srch_prg=0;
+
 our %sequence_summary=(
 	-total_seq=>0,
 	-very_short_seq=>0,
 	-paralogslogs=>0,
 	-host_orthologs=>0,
 	-drug_target_homologs=>0,
-	-putative_drug_targets=>0,
-	
+	-putative_drug_targets=>0,	
 );
+##Progress bars
+our $read_seq_prg=0;
+our $cdhit_prg=0;
+our $remove_short_seq_prg=0;
+our $string_srch_prg=0;
+
+our $min_aa_len=50; 
+our $cd_hit_identity=60;
+our $chk_cdhit=1;
+
+## MAKING SCRIPT MORE INDEPENDANT
+print STDERR "File setting:\n";
+
+if(! -d $installation_path."/executables/"){ print STDERR "\t".$installation_path."/executables/ : directory Not found. Creating one."; mkdir  $installation_path."/executables/", 0755}
+if(! -d $installation_path."/local_dat/"){ print STDERR "\t".$installation_path."/local_dat/ : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/", 0755}
+
+##Making it on path
+my $EXEC_PATH = win_path($installation_path."/executables/");
+$EXEC_PATH =~s/\"//g;
+$ENV{'PATH'}.=';'.$EXEC_PATH;
+
+if(!check_executable_on_PATH("blastall --help")){ print STDERR "blastall.exe not found on PATH"; exit(1)}
+if(!check_executable_on_PATH("cd-hit -help")){ print STDERR "ch-hit.exe not found on PATH"; exit(1)}
+if(!check_executable_on_PATH("sqlite3 -version")){ print STDERR "sqlite3.exe not found on PATH"; exit(1)}
+if(!check_executable_on_PATH("formatdb --help")){ print STDERR "formatdb.exe not found on PATH"; exit(1)}
+
+if(! -d $installation_path."/local_dat/PATHOGENS"){ 
+print STDERR "\t".$installation_path."/local_dat/PATHOGENS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/PATHOGENS", 0755; 
+system ("sqlite3 ".win_path($installation_path."/local_dat/PATHOGENS").'\pathogen_taxonomy.db  "Create table taxonomy (	fasta_file VARCHAR(40) Primary Key,	ORG_CODE VARCHAR (10),	species VARCHAR (100),	TaxID INT(10),	SuperKingdom VARCHAR(50),	phylum VARCHAR(50),	class VARCHAR(50),	order_ VARCHAR(50),	family VARCHAR(50),	genus VARCHAR(50),	Description TEXT NULL);"');
+
+print STDERR "Add Pathogen complete proteomes for broad-spectrum analysis using Utility menu\n\n\n";
+}
+if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR "\t".$installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755;system('echo >'.win_path("$installation_path/local_dat/drugTarget_db_names.txt"));}
+if(! -d $installation_path."/local_dat/GO"){ print STDERR "\t".$installation_path."/local_dat/GO : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/GO", 0755;
+}
+if(!-e "local_dat/GO/GO.db"){
+print STDERR "\t".$installation_path."/local_dat/GO/GO.db : file Not found. Creating one.\n\n";
+system ("sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
+system ("sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE ecoli_go (	GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(8));"'); 
+}
+
+
+print STDERR "Reading drug Target data:";
+our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
+our $ref_drug_db_array=[];
+open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
+our $drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+our $drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+print STDERR "DONE";
+
+print STDERR "\nReading broad-spectrum data:";
+our $broad_spectrum_pathogen_db_sq = win_path($installation_path."\\local_dat\\pathogen_taxonomy.db");
+##'"\"PATHOGENS\" "PATHOGENS\ACIBC" "PATHOGENS\ACIBS" "PATHOGENS\ACIBT" "PATHOGENS\BURM1\""';##read files to update it;
+our $broad_spe_species_per_query=0;
+our $broad_spe_org_code_full_name=read_broad_spe_codes();				##deccrypt	#("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
+our $tax_level="Family";
+our $brd_sp_db_levels;
+our $ref_brd_sel_db_array=[]; ## array ref ; array saves  tax_levels sel by user			
+($brd_sp_db_levels,$ref_brd_sel_db_array) = fetch_tax_names($tax_level);		
+our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
+print STDERR "DONE\n";
+
+our $PPI_score_cutoff=700;		##STRING score cutoff
+our $top_hub_perc=20;
+
+our ($e_val_1,$out_fmt_1,$sub_matrix_1,$gap_score_1, $extra_params_BLAST1,$word_size_1,$threshold_1,$perc_identity_1,$blast_prg1)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,20,0);	
+our ($e_val_2,$out_fmt_2,$sub_matrix_2,$gap_score_2, $extra_params_BLAST2,$word_size_2,$threshold_2,$perc_identity_2,$blast_prg2)=(0.0000000001,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
+our ($e_val_3,$out_fmt_3,$sub_matrix_3,$gap_score_3, $extra_params_BLAST3,$word_size_3,$threshold_3,$perc_identity_3,$blast_prg3)=(0.01,8,"BLOSUM62","11,1","",3,11,30,0);
+our ($e_val_4,$out_fmt_4,$sub_matrix_4,$gap_score_4, $extra_params_BLAST4,$word_size_4,$threshold_4,$perc_identity_4,$blast_prg4)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
+our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5,$blast_prg5)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
+
+###Variable for Ontology analysis
+#params for finding sismilarity with E.coli
+our $model_org_ref_proteome = win_path($installation_path."\\local_dat\\GO\\UP000000625_83333.fasta");		##E.coli is used as refernce for all ontology analaysis
+our $GO_db = $installation_path."/local_dat/GO/GO.db";		##contains two tables ecoli_go, go_terms
+#our $model_org_ref_proteome_GO = process_GO_db($installation_path."/local_dat/GO/UP000000625_83333.GO.txt");		##E.coli is used as refernce for all ontology analaysis ; stores ref hash
+
+chk_GO_db();		##Checking GO data in tables;
+
+
+###Variables for subcellular localization
+print STDERR "Checking Internet";
+if(check_internet()){ print STDERR ": Internet working\n";}
+else{print STDERR ": Internet NOT working, Subcellular localization cannot determined\n";}
+
+
+
+my $about_text="The availability of complete genome sequences of pathogenic bacteria and their protein complements in public domain has made it possible to determine potential drug targets in these pathogens using computer-based in-silico techniques. Intersection of two datasets, namely \n\t(i)a pathogen's subtractive proteome dataset with the host proteome, and \n\t(ii) the pathogen's minimal essential protein dataset, should represent a set of proteins whose manipulation may reasonably be expected to interfere with the pathogen's survival without adversely affecting the host. These proteins could thus act as potential targets for drugs acting against the particular pathogen.\n\nThis program comes with ABSOLUTELY NO WARRANTY; for details http://www.gnu.org/licenses/.
+This is free software, and you are welcome to redistribute it under certain conditions.\n\n";
+my $citation_text="Sarangi AN et al., Exogeneous drug target identifiation tool.\nPMID:000000";
+
+
+
 
 
 ####Detecting number of processors#####
@@ -90,118 +173,9 @@ if($avl_CPU_count==1){
 	$avl_CPU_count=~s/\n//g;
 }
 $avl_CPU_count=~s/\D//g;
-
-													#
 my $CPU_list;   
 foreach(1..$avl_CPU_count){$CPU_list.=$_." ";   } 
 my $use_cores=$avl_CPU_count;		##using max no of CPUs by default
-
-our $min_aa_len=50; #after translations
-#our $min_ntd_len=100;
-our $cd_hit_identity=60;
-our $chk_cdhit=1;
-
-##Check executable files in path
-
-
-
-## MAKING SCRIPT MORE INDEPENDANT
-print STDERR "File setting:\n";
-
-if(! -d $installation_path."/executables/"){ print STDERR "\t".$installation_path."/executables/ : directory Not found. Creating one."; mkdir  $installation_path."/executables/", 0755}
-if(! -d $installation_path."/local_dat/"){ print STDERR "\t".$installation_path."/local_dat/ : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/", 0755}
-if(! -e $installation_path."/executables/blastall.exe"){ die "\t".$installation_path."/executables/blastall.exe : blastall.exe Not found. Please add all executable files in to /executable directory";}
-if(! -e $installation_path."/executables/sqlite3.exe"){ die "\t".$installation_path."/executables/sqlite3.exe : blastall.exe Not found. Please add all executable files in to /executable directory";}
-if(! -e $installation_path."/executables/cd-hit.exe"){ die "\t".$installation_path."/executables/cd-hit.exe : blastall.exe Not found. Please add all executable files in to /executable directory";}
-if(! -e $installation_path."/executables/formatdb.exe"){ die "\t".$installation_path."/executables/formatdb.exe : blastall.exe Not found. Please add all executable files in to /executable directory";}
-
-if(! -d $installation_path."/local_dat/PATHOGENS"){ 
-print STDERR "\t".$installation_path."/local_dat/PATHOGENS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/PATHOGENS", 0755; 
-system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/PATHOGENS").'\pathogen_taxonomy.db  "Create table taxonomy (	fasta_file VARCHAR(40) Primary Key,	ORG_CODE VARCHAR (10),	species VARCHAR (100),	TaxID INT(10),	SuperKingdom VARCHAR(50),	phylum VARCHAR(50),	class VARCHAR(50),	order_ VARCHAR(50),	family VARCHAR(50),	genus VARCHAR(50),	Description TEXT NULL);"');
-
-print STDERR "Add Pathogen complete proteomes for broad-spectrum analysis using Utility menu\n\n\n";
-}
-if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR "\t".$installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755;system('echo >'.win_path("$installation_path/local_dat/drugTarget_db_names.txt"));}
-#if(! -d $installation_path."/local_dat/PPI"){ print STDERR "\t".$installation_path."/local_dat/PPI : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/PPI", 0755}
-if(! -d $installation_path."/local_dat/GO"){ print STDERR "\t".$installation_path."/local_dat/GO : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/GO", 0755;
-system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
-system ("executables\\sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE ecoli_go (	GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(8));"'); 
-#print STDERR "Add E.coli GO data for GO enrichment using Utility menu\n\n\n";
-}
-
-
-print STDERR "Reading drug Target data:";
-our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
-our $ref_drug_db_array=[];
-open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
-our $drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-our $drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-print STDERR "DONE";
-our $enable_broad_spe=1;			##decrypted
-print STDERR "\nReading broad-spectrum data:";
-our $broad_spectrum_pathogen_db_sq = win_path($installation_path."\\local_dat\\pathogen_taxonomy.db");
-#$broad_spectrum_pathogen_db_sq=win_path($broad_spectrum_pathogen_db_sq);
-##'"\"PATHOGENS\" "PATHOGENS\ACIBC" "PATHOGENS\ACIBS" "PATHOGENS\ACIBT" "PATHOGENS\BURM1\""';##read files to update it;
-our $broad_spe_species_per_query=0;
-our $broad_spe_org_code_full_name=read_broad_spe_codes();					#("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
-our $tax_level="Family";
-our $brd_sp_db_levels;
-our $ref_brd_sel_db_array=[]; ## array ref ; array saves  tax_levels sel by user			
-($brd_sp_db_levels,$ref_brd_sel_db_array) = fetch_tax_names($tax_level);		
-our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
-print STDERR "DONE\n";
-
-##our $database = win_path($installation_path."\\local_dat\\PPI\\PPI_sqlite3.db");
-
-our $blast_prg1=0; 
-our $blast_prg2=0;
-our $blast_prg4=0;		## drugBank progress
-our $blast_prg3=0;
-our $blast_prg5=0;
-
-
-our ($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=("$installation_path/executables/blastall.exe","$installation_path/executables/cd-hit.exe","$installation_path/executables/formatdb.exe","$installation_path/executables/sqlite3.exe");
-($blast_path,$cdhit_path,$formatdb_path,$sqlite_path) = (win_path($blast_path),win_path($cdhit_path),win_path($formatdb_path),win_path($sqlite_path)) ;
-
-our ($e_val_1,$out_fmt_1,$sub_matrix_1,$gap_score_1, $extra_params_BLAST1,$word_size_1,$threshold_1,$perc_identity_1)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,20);	#-b 1
-
-our ($e_val_2,$out_fmt_2,$sub_matrix_2,$gap_score_2, $extra_params_BLAST2,$word_size_2,$threshold_2,$perc_identity_2)=(0.0000000001,8,"BLOSUM62","11,1","-b 1",3,11,0);
-
-our ($e_val_3,$out_fmt_3,$sub_matrix_3,$gap_score_3, $extra_params_BLAST3,$word_size_3,$threshold_3,$perc_identity_3)=(0.01,8,"BLOSUM62","11,1","",3,11,30);
-our $broad_spe_BLAST_cutoff=40;		##percentidentity
-our ($e_val_4,$out_fmt_4,$sub_matrix_4,$gap_score_4, $extra_params_BLAST4,$word_size_4,$threshold_4,$perc_identity_4)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0);
-
-our $PPI_score_cutoff=700;		##STRING score cutoff
-our $top_hub_perc=20;
-
-
-###Variable for Ontology analysis
-#params for finding sismilarity with E.coli
-our $model_org_ref_proteome = win_path($installation_path."\\local_dat\\GO\\UP000000625_83333.fasta");		##E.coli is used as refernce for all ontology analaysis
-our $GO_db = $installation_path."/local_dat/GO/GO.db";		##contains two tables ecoli_go, go_terms
-#our $model_org_ref_proteome_GO = process_GO_db($installation_path."/local_dat/GO/UP000000625_83333.GO.txt");		##E.coli is used as refernce for all ontology analaysis ; stores ref hash
-our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0);
-chk_GO_db();		##Checking GO data in tables;
-
-
-###Variables for subcellular localization
-##
-print STDERR "Checking Internet";
-if(check_internet()){ print STDERR ": Internet working\n";}
-else{print STDERR ": Internet NOT working, Subcellular localization cannot determined\n";}
-
-
-our	$brd_spec_chk=1;
-our	$drg_tar_blast_chk=1;
-our	$KEGG_chk=0;
-our	$sub_cel_loc_chk=0;
-
-
-my $about_text="The availability of complete genome sequences of pathogenic bacteria and their protein complements in public domain has made it possible to determine potential drug targets in these pathogens using computer-based in-silico techniques. Intersection of two datasets, namely \n\t(i)a pathogen's subtractive proteome dataset with the host proteome, and \n\t(ii) the pathogen's minimal essential protein dataset, should represent a set of proteins whose manipulation may reasonably be expected to interfere with the pathogen's survival without adversely affecting the host. These proteins could thus act as potential targets for drugs acting against the particular pathogen.\n\nThis program comes with ABSOLUTELY NO WARRANTY; for details http://www.gnu.org/licenses/.
-This is free software, and you are welcome to redistribute it under certain conditions.\n\n";
-my $citation_text="Sarangi AN et al., Exogeneous drug target identifiation tool.\nPMID:000000";
-
-
 
 if($filter_param_settings_file){
 	print STDERR "Loading Parameter file....";
@@ -213,7 +187,6 @@ if($filter_param_settings_file){
 		if(/^MIN_AA_LEN\s+=\s+(\S+)/){ $min_aa_len=$1}
 		if(/^CHK_CD_HIT\s+=\s+(\S+)/){ $chk_cdhit =$1}
 		if(/^CD_HIT_IDN\s+=\s+(\S+)/){ $cd_hit_identity=$1}
-		#if(/^BRD_SPEC_THR\s+=\s+(\S+)/){ $broad_spe_BLAST_cutoff=$1}
 		if(/^BRD_SPEC_SP_PER_Q\s+=\s+(\S+)/){ $broad_spe_species_per_query=$1}
        
 		if(/^E_VAL_1\s+=\s+(\S+)/){ $e_val_1=$1}
@@ -243,14 +216,23 @@ if($filter_param_settings_file){
 		if(/^THRHOLD_3\s+=\s+(\S+)/){ $threshold_3=$1}
 		if(/^PERC_IDENTY_3\s+=\s+(\S+)/){ $perc_identity_3=$1}
        
-		if(/^E_VAL_4\s+=\s+(\S+)/){ $e_val_1=$1}
-		if(/^OUT_FMT_4\s+=\s+(\S+)/){ $out_fmt_1=$1}
-		if(/^SUB_MAT_4\s+=\s+(\S+)/){ $sub_matrix_1=$1}
-		if(/^GAP_SCOR_4\s+=\s+(\S+)/){ $gap_score_1=$1}
-		if(/^EXTRA_PARAM_4\s+=\s+(\S+)/){ $extra_params_BLAST1=$1}
-		if(/^WORD_SIZE_4\s+=\s+(\S+)/){ $word_size_1=$1}
-		if(/^THRHOLD_4\s+=\s+(\S+)/){ $threshold_1  =$1}
+		if(/^E_VAL_4\s+=\s+(\S+)/){ $e_val_4=$1}
+		if(/^OUT_FMT_4\s+=\s+(\S+)/){ $out_fmt_4=$1}
+		if(/^SUB_MAT_4\s+=\s+(\S+)/){ $sub_matrix_4=$1}
+		if(/^GAP_SCOR_4\s+=\s+(\S+)/){ $gap_score_4=$1}
+		if(/^EXTRA_PARAM_4\s+=\s+(\S+)/){ $extra_params_BLAST4=$1}
+		if(/^WORD_SIZE_4\s+=\s+(\S+)/){ $word_size_4=$1}
+		if(/^THRHOLD_4\s+=\s+(\S+)/){ $threshold_4  =$1}
 		if(/^PERC_IDENTY_4\s+=\s+(\S+)/){ $perc_identity_4=$1}
+		
+		if(/^E_VAL_5\s+=\s+(\S+)/){ $e_val_5=$1}
+		if(/^OUT_FMT_5\s+=\s+(\S+)/){ $out_fmt_5=$1}
+		if(/^SUB_MAT_5\s+=\s+(\S+)/){ $sub_matrix_5=$1}
+		if(/^GAP_SCOR_5\s+=\s+(\S+)/){ $gap_score_5=$1}
+		if(/^EXTRA_PARAM_5\s+=\s+(\S+)/){ $extra_params_BLAST5=$1}
+		if(/^WORD_SIZE_5\s+=\s+(\S+)/){ $word_size_5=$1}
+		if(/^THRHOLD_5\s+=\s+(\S+)/){ $threshold_5  =$1}
+		if(/^PERC_IDENTY_5\s+=\s+(\S+)/){ $perc_identity_5=$1}
  
 		if(/^PPI_THR\s+=\s+(\S+)/){ $PPI_score_cutoff=$1}
 		if(/^TOP_HUB_PERC\s+=\s+(\S+)/){ $top_hub_perc=$1}
@@ -259,9 +241,6 @@ if($filter_param_settings_file){
 	
 	close P;	
 }
-
-
-
 ###################################################################################
 
 print STDERR "Start GUI...\n";
@@ -303,14 +282,14 @@ if (Tkx::tk_windowingsystem() eq "aqua") {
 		$mw->g_bind("<3>", [sub {my($x,$y) = @_; $menu->g_tk___popup($x,$y)}, Tkx::Ev("%X", "%Y")]);
 	}
 #add menu items 
-$file->add_command(-label => "Create new Project",-underline=>1, -command => \&create_project);
+$file->add_command(-label => "Create new Project",-underline=>1, -command =>\&create_project);
 #$file->add_command(-label => "Open Project",-underline=>0, -command => sub {});	
 #$file->add_command(-label => "Save Project",-underline=>0, -command => sub {});	
-$file->add_command(-label => "Quit",-underline=>0, -command => sub {system("del $root_path\\*.tmp"); exit;});
+$file->add_command(-label => "Quit",-underline=>0, -command => sub {system("del $root_path\\*.tmp"); exit(1);});
 
 $settings->add_command(-label => "Open settings",-underline=>1, -command =>\&settings);
 $settings->add_command(-label => "Down-stream analysis",-underline=>1, -command =>\&down_str_anal);
-$settings->add_command(-label => "Executable files path",-underline=>1, -command => \&executable_paths);
+
 
 $dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>1, -command =>sub {});	## functions updated later
 $dwn_str_anal->add_command(-label =>"Compare with known targets", -underline=>1, -command =>sub {});
@@ -399,6 +378,15 @@ WORD_SIZE_4 = $word_size_4
 THRHOLD_4 = $threshold_4  
 PERC_IDENTY_4 = $perc_identity_4
 
+E_VAL_5 = $e_val_5
+OUT_FMT_5 = $out_fmt_5
+SUB_MAT_5 = $sub_matrix_5
+GAP_SCOR_5 = $gap_score_5
+EXTRA_PARAM_5 = $extra_params_BLAST5
+WORD_SIZE_5 = $word_size_5
+THRHOLD_5 = $threshold_5  
+PERC_IDENTY_5 = $perc_identity_5
+
 PPI_THR = $PPI_score_cutoff
 TOP_HUB_PERC = $top_hub_perc
  
@@ -415,14 +403,15 @@ $dwn_str_anal->entryconfigure("Sub-cellular localization", -command =>sub {$frnt
 
 Tkx::update();
 
+
+
 ##Args: ref of front panel Frams, ref of Run button, ref of an global variable to store ref of all seq data;
 ##Returns: nothing
 sub main_script
 {
 	my $frm=shift;
 	my $run_button=shift;
-	my  $all_t_seq;				##stores all seq
-	
+		
 	##Top panel destroyed; create a new at 0 0 
 	my $frm_top=$$frm->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 500,-padding => "0 0 0 0");
 	$frm_top->g_grid(-column=>0,-row=>0,-sticky=>"nswe");
@@ -510,7 +499,6 @@ sub main_script
 	###################panel widget END##########################	
 	
 	my $save_result = $frm_top->new_button(-text=>"Export putative target sequences",-width=>28, -state=>"disabled",-command=>sub{
-	
 			my $save= Tkx::tk___getSaveFile();
 			#$crt_win->g_raise();
 			#my $r=fetch_seq_by_id($all_t_seq,$novel_drug_targets);	##
@@ -526,7 +514,7 @@ sub main_script
 	###MAIN script goes here								  #
 	###########################################################
 
-	$all_t_seq=read_fasta_sequence($Tproteome_file);
+	my $all_t_seq=read_fasta_sequence($Tproteome_file);
 	open(R1,"> $L_root_path/excluded_seq_step-1.fasta") or die " $! $L_root_path/excluded_seq_step-1.fasta";
 	open(A1,"> $L_root_path/accepted_seq_step-1.fasta") or die "$! $L_root_path/accepted_seq_step-1.fasta";
 	$sequence_summary{-total_seq}=scalar keys %$all_t_seq;
@@ -544,9 +532,9 @@ sub main_script
 	$entry_short_seq->delete(0, "end"); $entry_short_seq->insert(0, $sequence_summary{-very_short_seq}) ;
 	$remove_short_seq_prg=100;Tkx::update();
 
-	$cdhit_path=~ s{/}{\\}g; $cdhit_path='"'.$cdhit_path.'"';
+	
 
-	if($chk_cdhit)
+	if(!$skip_cdHit)
 		{
 			my $cdHit_c=$cd_hit_identity/100;
 
@@ -565,7 +553,7 @@ sub main_script
 			
 			
 			`echo echo Please wait.......... >> batch.bat`;
-			`echo $cdhit_path -i $root_path\\accepted_seq_step-1.fasta -o $root_path\\cdHit_out -d 0 -c $cdHit_c -n 3 >> batch.bat`;
+			`echo cd-hit.exe -i $root_path\\accepted_seq_step-1.fasta -o $root_path\\cdHit_out -d 0 -c $cdHit_c -n 3 >> batch.bat`;
 			`echo rename $root_path\\cdHit_out.clstr cdHit_out.clstr.txt >> batch.bat`;	##mv works
 			`echo exit >> batch.bat`;
 			system("start batch.bat ");
@@ -591,56 +579,66 @@ sub main_script
 		$cdhit_prg=100;	
 		Tkx::update();
 		
-	$blast_path=~ s{/}{\\}g; $blast_path='"'.$blast_path.'"';
-	$Hproteome_file=~ s{/}{\\}g;  $Hproteome_file='"\"'.$Hproteome_file.'\""';
-
-	unlink "$L_root_path/host_orthologs_blast1.out.txt";
-	my($gap_open, $gap_extns)=split /,/,$gap_score_1;
-	my $blast1="$blast_path -p blastp -d $Hproteome_file -i $root_path\\accepted_seq_step-2.fasta -e $e_val_1 -m $out_fmt_1 -W $word_size_1 -M $sub_matrix_1 -G $gap_open -E $gap_extns -o $root_path\\host_orthologs_blast1.out -a $use_cores -f $threshold_1"." $extra_params_BLAST1";
-			`echo echo off > batch.bat`;
-			`echo color B0 >> batch.bat`;
-			`echo cls >> batch.bat`;
-			`echo echo :: External program Blastall.exe :: >> batch.bat`;
-			`echo echo ---------------------------------------------- >> batch.bat`;
-			
-			`echo echo Parameters >> batch.bat`;
-			`echo echo 	Program: blastp >> batch.bat`;
-			`echo echo 	Query		: $root_path\\accepted_seq_step-2.fasta >> batch.bat`;
-			`echo echo 	Database	: $Hproteome_file >> batch.bat`;
-			`echo echo 	E-value	: $e_val_1 >> batch.bat`;
-			`echo echo 	Scoring matrix: $sub_matrix_1 >> batch.bat`;
-			`echo echo 	Gap-penalty (Open,Extension): $gap_open,$gap_extns >> batch.bat`;
-			`echo echo 	Word size: $word_size_1 >> batch.bat`;
-			`echo echo 	Threshold for extending hits: $threshold_1 >> batch.bat`;
-			`echo echo 	CPUs: $use_cores >> batch.bat`;
-			
-			`echo echo 	Identity percentage: $perc_identity_1 >> batch.bat`;
-			
-			`echo echo 	Please wait..... >> batch.bat`;
-			`echo $blast1 >> batch.bat`;
-			`echo rename $root_path\\host_orthologs_blast1.out host_orthologs_blast1.out.txt >> batch.bat`;	##mv works
-			`echo exit >> batch.bat`;
-			system("start batch.bat ");
-
-	while(!(-e "$L_root_path/host_orthologs_blast1.out.txt")){
-			##wait till human_orthologs_blast1.out.txt is available
-		$blast_prg1=blast_progress("$root_path\\host_orthologs_blast1.out","$L_root_path/host_orthologs_blast1.out",$sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})); 
-		$blast_prg1= 90 if $blast_prg1>90;
-		sleep(3);Tkx::update(); 
-	}	
-	$blast_prg1=100;Tkx::update();
+	$Hproteome_file=win_path($Hproteome_file);
 	
-	my ($host_like_proteins,$not_host_like_proteins)=process_host_blast_out("$L_root_path/accepted_seq_step-2.fasta","$L_root_path/host_orthologs_blast1.out.txt", $perc_identity_1 );
-	$sequence_summary{-host_orthologs}=scalar @$host_like_proteins;
+	my (($host_like_proteins,$not_host_like_proteins));
+	if(!$skip_host_BLAST){
+	
+			unlink "$L_root_path/host_orthologs_blast1.out.txt";
+			my($gap_open, $gap_extns)=split /,/,$gap_score_1;
+			my $blast1="blastall.exe -p blastp -d $Hproteome_file -i $root_path\\accepted_seq_step-2.fasta -e $e_val_1 -m $out_fmt_1 -W $word_size_1 -M $sub_matrix_1 -G $gap_open -E $gap_extns -o $root_path\\host_orthologs_blast1.out -a $use_cores -f $threshold_1"." $extra_params_BLAST1";
+					`echo echo off > batch.bat`;
+					`echo color B0 >> batch.bat`;
+					`echo cls >> batch.bat`;
+					`echo echo :: External program Blastall.exe :: >> batch.bat`;
+					`echo echo ---------------------------------------------- >> batch.bat`;
+					
+					`echo echo Parameters >> batch.bat`;
+					`echo echo 	Program: blastp >> batch.bat`;
+					`echo echo 	Query		: $root_path\\accepted_seq_step-2.fasta >> batch.bat`;
+					`echo echo 	Database	: $Hproteome_file >> batch.bat`;
+					`echo echo 	E-value	: $e_val_1 >> batch.bat`;
+					`echo echo 	Scoring matrix: $sub_matrix_1 >> batch.bat`;
+					`echo echo 	Gap-penalty (Open,Extension): $gap_open,$gap_extns >> batch.bat`;
+					`echo echo 	Word size: $word_size_1 >> batch.bat`;
+					`echo echo 	Threshold for extending hits: $threshold_1 >> batch.bat`;
+					`echo echo 	CPUs: $use_cores >> batch.bat`;
+					
+					`echo echo 	Identity percentage: $perc_identity_1 >> batch.bat`;
+					
+					`echo echo 	Please wait..... >> batch.bat`;
+					`echo $blast1 >> batch.bat`;
+					`echo rename $root_path\\host_orthologs_blast1.out host_orthologs_blast1.out.txt >> batch.bat`;	##mv works
+					`echo exit >> batch.bat`;
+					system("start batch.bat ");
+
+			while(!(-e "$L_root_path/host_orthologs_blast1.out.txt")){
+					##wait till human_orthologs_blast1.out.txt is available
+				$blast_prg1=blast_progress("$root_path\\host_orthologs_blast1.out","$L_root_path/host_orthologs_blast1.out",$sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})); 
+				$blast_prg1= 90 if $blast_prg1>90;
+				sleep(3);Tkx::update(); 
+			}	
+			$blast_prg1=100;Tkx::update();
 			
-	my $non_host_seq_id=fetch_seq_by_id($all_t_seq,$not_host_like_proteins);
-	write_fasta_seq($non_host_seq_id,"$L_root_path/accepted_seq_step-3.fasta");
-	my $r=fetch_seq_by_id($all_t_seq,$host_like_proteins);
-	write_fasta_seq($r,"$L_root_path/excluded_seq_step-3.fasta");
+			($host_like_proteins,$not_host_like_proteins)=process_host_blast_out("$L_root_path/accepted_seq_step-2.fasta","$L_root_path/host_orthologs_blast1.out.txt", $perc_identity_1 );
+			$sequence_summary{-host_orthologs}=scalar @$host_like_proteins;
+					
+			my $non_host_seq_id=fetch_seq_by_id($all_t_seq,$not_host_like_proteins);
+			write_fasta_seq($non_host_seq_id,"$L_root_path/accepted_seq_step-3.fasta");
+			my $r=fetch_seq_by_id($all_t_seq,$host_like_proteins);
+			write_fasta_seq($r,"$L_root_path/excluded_seq_step-3.fasta");
+			if (scalar @$not_host_like_proteins <2){Tkx::tk___messageBox(-message => "All input sequences have homologs in host proteome!!! "); exit(1);}
+	}
+	else{
+			$blast_prg1=50;
+			system "copy $root_path\\accepted_seq_step-2.fasta $root_path\\accepted_seq_step-3.fasta"; 
+			$sequence_summary{-host_orthologs}=0;
+			$blast_prg1=100;Tkx::update();	
+	}
+		
 	$entry_host_homolog_seq->delete(0, "end"); $entry_host_homolog_seq->insert(0, $sequence_summary{-host_orthologs}) ;
-	$entry_non_host_proteome->delete(0, "end"); $entry_non_host_proteome->insert(0, $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-paralogslogs}+$sequence_summary{-host_orthologs})) ;
-	
-	Tkx::update();
+	$entry_non_host_proteome->delete(0, "end"); $entry_non_host_proteome->insert(0, $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-paralogslogs}+$sequence_summary{-host_orthologs})) ;	
+	Tkx::update();	
 
 	Tkx::tk___messageBox(-message => "Select an target prediction approach\nPerform either 'Sequence-based approach'  or 'PPI network-based approach' ");
 	
@@ -665,12 +663,11 @@ sub main_script
 			$do_ess_pro_blast->configure(-state=>"disabled");
 			
 			$string_srch_prg=0;
-			$sqlite_path=~ s{/}{\\}g;  #$sqlite_path='"\"'.$sqlite_path.'\""';;
 			#$interactome_file=~ s{/}{\\}g;
 			#import PPI file to  sql database 25%
 			#calculations; 40%
 			#id mapping to $L_root_path/accepted_seq_step-3.fasta; 25%
-			die "not_host_like_proteins no datya $not_host_like_proteins\n" if (scalar @$not_host_like_proteins <2);
+			
 			
 			#sorting and mapping to accepted_seq_step-2.fasta ids; 10% $non_host_seq_id
 			Tkx::tk___messageBox(-type => "ok",
@@ -717,7 +714,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			print S "echo Database: $database  \n";
 			print S "echo Separator: ','  \n";
 			print S "echo ---------------------------\necho Please wait....  \n";
-			print S "$sqlite_path $database <import.sql\n";
+			print S "formatdb.exe $database <import.sql\n";
 			#print S "copy import.sql  mm.sql\n";
 			print S "del import.sql  \n";
 			print S "exit  \n";
@@ -734,14 +731,12 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 								  or die $DBI::errstr;
 			foreach my $i(@$not_host_like_proteins)
-			{
-				
+			{				
 				my $p=$seq_id_to_PPI_id_map{$i};
 				#print "$i --> $p -\n";
 				next if !$p;
 				my $stmt = qq(INSERT INTO tmp (id) VALUES ('$p'););	
-				my $rv = $dbh->do($stmt) or die $DBI::errstr;
-			
+				my $rv = $dbh->do($stmt) or die $DBI::errstr;			
 			}
 			
 			my $stmt = qq(select PPI.proteinA, PPI.proteinB, PPI.score from PPI INNER JOIN tmp where (tmp.id=PPI.proteinA) AND PPI.score >=$PPI_score_cutoff);	##LIMIT 1500
@@ -782,8 +777,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			
 ##Cytohubba
 			foreach my $node(@V)			#(@V)
-				{
-					
+				{					
 					$centrality_scores_per_node{$node}={
 								radiality=>0,
 								eccentricity=>0,
@@ -847,7 +841,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 .separator ,
 .import \"componenet.txt\" tmp2";
 						close S;
-						system("$sqlite_path $database < import.sql");
+						system("formatdb.exe $database < import.sql");
 						$node_componenet_index_tograph{$i_cc} = Graph::Undirected->new();	##storing graph for that index
 						
 						my $stmt = qq(select PPI.proteinA, PPI.proteinB from PPI INNER JOIN tmp2 where ((tmp2.proteinA=PPI.proteinA) AND (tmp2.proteinB=PPI.proteinB)) AND PPI.score >=$PPI_score_cutoff);	##LIMIT 1500
@@ -955,8 +949,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				}
 				else{push @not_filtered_id,$sorted_filterd_ids[$i]; $total_summary{$sorted_filterd_ids[$i]}->{filt=>0} }			
 			}
-			$string_srch_prg=80;Tkx::update();
-						
+			$string_srch_prg=80;Tkx::update();						
 			close N;
 			
 #=cut		### IMPORTANT:  commnet the following one lines of code while DELETING cut	;just hacking to add shotcut @filtered_id;
@@ -1001,7 +994,6 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 
 ###do_ess_pro_blast		
 	$do_ess_pro_blast->configure(-command=>sub{
-
 		if(!$Eproteome_file){
 			Tkx::tk___messageBox(-type => "ok",
 					-message => "Kindly import essential proteome\n",
@@ -1023,7 +1015,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 
 			unlink "$L_root_path/essential_protein_blast2.out.txt";
 			my($gap_open, $gap_extns)=split /,/,$gap_score_2;
-			my $blast2="$blast_path -p blastp -d $Eproteome_file -i $root_path\\accepted_seq_step-3.fasta -e $e_val_2 -m $out_fmt_2 -W $word_size_2 -M $sub_matrix_2 -G $gap_open -E $gap_extns -o $root_path\\essential_protein_blast2.out -f $threshold_2 -a $use_cores"." $extra_params_BLAST2";
+			my $blast2="blastall.exe -p blastp -d $Eproteome_file -i $root_path\\accepted_seq_step-3.fasta -e $e_val_2 -m $out_fmt_2 -W $word_size_2 -M $sub_matrix_2 -G $gap_open -E $gap_extns -o $root_path\\essential_protein_blast2.out -f $threshold_2 -a $use_cores"." $extra_params_BLAST2";
 				`echo echo off > batch.bat`;
 				`echo color B0 >> batch.bat`;
 				`echo cls >> batch.bat`;				
@@ -1082,12 +1074,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				
 				$save_result->configure(-state=>"normal");								
 				Tkx::tk___messageBox(-message => "Run complete.\n \nSave results and parameter options."); 	
-				
-
-	});
-		
-		
-		
+	});		
 	$do_PPI_search->configure(-state=>"normal");
 	$do_ess_pro_blast->configure(-state=>"normal");
 	Tkx::update();
@@ -1104,7 +1091,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 sub broad_spect_run
 {
 	my $frm=shift;
-	my $run_button = shift;;	
+	my $run_button = shift;
 	
 	my $frm_top=$$frm->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 500,-padding => "0 0 0 0");
 	$frm_top->g_grid(-column=>0,-row=>0,-sticky=>"nswe");
@@ -1175,7 +1162,7 @@ sub broad_spect_run
 		$$run_button->configure(-state=>"disabled");
 	unlink "$L_root_path/broad_spe_blast3.out.txt" if (-e "$L_root_path/broad_spe_blast3.out.txt");
 	my($gap_open, $gap_extns)=split /,/,$gap_score_3;
-	my $blast3="$blast_path -p blastp -d $broad_spectrum_pathogen_db_list -i $input_seq -e $e_val_3 -m $out_fmt_3 -W $word_size_3 -M $sub_matrix_3 -G $gap_open -E $gap_extns -o $root_path\\broad_spe_blast3.out -a $use_cores -f $threshold_3"." $extra_params_BLAST3";
+	my $blast3="blastall.exe -p blastp -d $broad_spectrum_pathogen_db_list -i $input_seq -e $e_val_3 -m $out_fmt_3 -W $word_size_3 -M $sub_matrix_3 -G $gap_open -E $gap_extns -o $root_path\\broad_spe_blast3.out -a $use_cores -f $threshold_3"." $extra_params_BLAST3";
 		`echo echo off > batch.bat`;
 		`echo color 90 >> batch.bat`;
 		`echo cls >> batch.bat`;
@@ -1207,8 +1194,8 @@ sub broad_spect_run
 		sleep(3);Tkx::update(); 
 		}										##wait till essential_protein_blast2.out.txt is available
 		$blast_prg3=100;  Tkx::update();
-		my $ref_broad_spec_counts=process_broad_spe_BLAST_out("$L_root_path/broad_spe_blast3.out.txt",$broad_spe_BLAST_cutoff); 				##\%hash
-		my %broad_spec_counts;					##stores counts per query;; should be GLOBAL??
+		my $ref_broad_spec_counts=process_broad_spe_BLAST_out("$L_root_path/broad_spe_blast3.out.txt",$perc_identity_3); 				##\%hash
+		my %broad_spec_counts;					
 		foreach my $a( keys %$ref_broad_spec_counts ){
 			$broad_spec_counts{$a}=scalar @{$ref_broad_spec_counts->{$a}};
 		}
@@ -1357,7 +1344,7 @@ sub comp_known_DT
 			$$run_button->configure(-state=>"disabled");
 			unlink "$L_root_path/drug_target_blast4.out.txt";
 			my($gap_open, $gap_extns)=split /,/,$gap_score_1;
-			my $blast4="$blast_path -p blastp -d $drug_blast_db_names -i $input_seq -e $e_val_4 -m $out_fmt_4 -W $word_size_4 -M $sub_matrix_4 -G $gap_open -E $gap_extns -o $root_path\\drug_target_blast4.out -a $use_cores -f $threshold_4"." $extra_params_BLAST4";
+			my $blast4="blastall.exe -p blastp -d $drug_blast_db_names -i $input_seq -e $e_val_4 -m $out_fmt_4 -W $word_size_4 -M $sub_matrix_4 -G $gap_open -E $gap_extns -o $root_path\\drug_target_blast4.out -a $use_cores -f $threshold_4"." $extra_params_BLAST4";
 				`echo echo off > batch.bat`;
 				`echo color 90 >> batch.bat`;
 				`echo cls >> batch.bat`;
@@ -1570,7 +1557,7 @@ sub GO_analysis{
 			$$run_button->configure(-state=>"disabled");
 			unlink "$L_root_path/E_coli_ortho_blast5.out.txt";
 			my($gap_open, $gap_extns)=split /,/,$gap_score_5;
-			my $blast5="$blast_path -p blastp -d $model_org_ref_proteome -i $background_seq -e $e_val_5 -m $out_fmt_5 -W $word_size_5 -M $sub_matrix_5 -G $gap_open -E $gap_extns -o $root_path\\E_coli_ortho_blast5.out -a $use_cores -f $threshold_5"." $extra_params_BLAST5";
+			my $blast5="blastall.exe -p blastp -d $model_org_ref_proteome -i $background_seq -e $e_val_5 -m $out_fmt_5 -W $word_size_5 -M $sub_matrix_5 -G $gap_open -E $gap_extns -o $root_path\\E_coli_ortho_blast5.out -a $use_cores -f $threshold_5"." $extra_params_BLAST5";
 				`echo echo off > batch.bat`;
 				`echo color 90 >> batch.bat`;
 				`echo cls >> batch.bat`;
@@ -2060,16 +2047,13 @@ sub create_project
 	
 		my $create_proj_but=$frm1->new_button(-text=>"Create project",-width=>18,-command=>sub{
 		$frm1->g_destroy;
-		$root_path=~s/"//g    if $root_path=~m/"/g;									## replace ""
-		$root_path=~ s{/}{\\}g;  						##Convert to windows format
-		$root_path =~s/""/"/g;															##sanity check; sometimes project name " " overlaps; 
 		$root_path.="\\$project_name";												##updating root path
-		$root_path='"'.$root_path.'"';
+		$root_path=win_path($root_path);
 		$L_root_path=unix_path($root_path);											##preserve UNIX format; fail safe
 		my $frm2=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
 		$frm2->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
 		
-		$frm2->new_ttk__label(-text=>"SPECIFY INPUT FILES",-foreground=>'blue')->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
+		$frm2->new_ttk__label(-text=>"SPECIFY INPUT FILES",-foreground=>'blue')->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>2,-sticky=>"nw");
 			
 		$frm2->new_ttk__label(-text=>"Pathogen proteome sequence(*.fas)[required]:		")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>1,-sticky=>"nw");
 		$frm2 ->new_ttk__entry(-textvariable => \$Tproteome_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
@@ -2090,21 +2074,28 @@ sub create_project
 		$frm2->new_ttk__label(-text=>"Interaction ID mapping file(*.tsv): 		")->g_grid(-column=>0, -row=>5,-padx=>2,-pady=>1,-sticky=>"nw");
 		$frm2 ->new_ttk__entry(-textvariable => \$PPI_id_map_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>5,-padx=>2,-pady=>1,-columnspan=>2);
 		$frm2->new_ttk__button(-text=>"...",-width=>5,-command=>sub{$PPI_id_map_file=Tkx::tk___getOpenFile(-parent=>$crt_win);$crt_win->g_raise();})->g_grid(-column=>4,-row=>5,-padx=>2,-pady=>1);
+	
+		$frm2->new_ttk__label(-text=>"Parameter file (optional):			")->g_grid(-column=>0, -row=>6,-padx=>2,-pady=>1,-sticky=>"nw");
+		$frm2 ->new_ttk__entry(-textvariable => \$filter_param_settings_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>6,-padx=>2,-pady=>1,-columnspan=>2);
+		$frm2->new_ttk__button(-text=>"...",-width=>5,-command=>sub{$filter_param_settings_file=Tkx::tk___getOpenFile(-parent=>$crt_win);$crt_win->g_raise();})->g_grid(-column=>4,-row=>6,-padx=>2,-pady=>1);
 		
-=i		$frm2->new_ttk__label(-text=>"Taxon id		")->g_grid(-column=>0, -row=>5,-padx=>2,-pady=>1,-sticky=>"nw");
-		$frm2 ->new_ttk__entry(-textvariable => \$taxon_id,-width=>40,)->g_grid(-column=>1,-row=>5,-padx=>2,-pady=>1,-columnspan=>2);
-		$frm2->new_ttk__button(-text=>"Validate",-width=>10,-command=>sub{
+		my $frm3=$frm2->new_ttk__frame(-borderwidth=>2);
+		$frm3->g_grid(-row=>7,-column=>0,-sticky=>"nsew",-columnspan=>6,-pady=>15);
+		
+		$frm3->new_ttk__label(-text=>"ADVANCED OPTIONS",-foreground=>'blue')->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>2,-sticky=>"nw");
+		$frm3->new_ttk__checkbutton(-text => "Skip CH-HIT",-variable => \$skip_cdHit, -onvalue =>1, -offvalue =>0)->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>2,-sticky=>"nw");
+		$frm3->new_ttk__checkbutton(-text => "Skip Host paralog BLAST",-variable => \$skip_host_BLAST, -onvalue =>1, -offvalue =>0)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>2,-sticky=>"nw");
+		
+		$frm3->new_ttk__label(-text=>"NCBI Taxon id	:")->g_grid(-column=>0, -row=>4,-padx=>2,-pady=>1,-sticky=>"e");
+		$frm3 ->new_ttk__entry(-textvariable => \$taxon_id,-width=>20,)->g_grid(-column=>1,-row=>4,-padx=>2,-pady=>0,-sticky=>"w");
+		$frm3->new_ttk__button(-text=>"Validate",-width=>10,-command=>sub{
 		
 			my $url = 'http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id='.$taxon_id;
 			my $content = get $url;  die "Couldn't get $url" unless defined $content;
 			my @content=split /\n/,$content;
 			foreach(@content){if(/Taxonomy\s+browser\s+\((.+)\)/g){$taxon_id=$taxon_id.": $1";}}
 			Tkx::update();		
-		})->g_grid(-column=>4,-row=>5,-padx=>2,-pady=>1);
-=cut		
-		$frm2->new_ttk__label(-text=>"Parameter file (optional):			")->g_grid(-column=>0, -row=>6,-padx=>2,-pady=>1,-sticky=>"nw");
-		$frm2 ->new_ttk__entry(-textvariable => \$filter_param_settings_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>6,-padx=>2,-pady=>1,-columnspan=>2);
-		$frm2->new_ttk__button(-text=>"...",-width=>5,-command=>sub{$filter_param_settings_file=Tkx::tk___getOpenFile(-parent=>$crt_win);$crt_win->g_raise();})->g_grid(-column=>4,-row=>6,-padx=>2,-pady=>1);
+		})->g_grid(-column=>4,-row=>4,-padx=>2,-pady=>0,-sticky=>"w");
 		
 		my $data_input_but=$frm2->new_button(-text=>"Ok",-width=>10,-command=>sub{
 			if(!$Tproteome_file ||!$Hproteome_file){
@@ -2119,7 +2110,7 @@ sub create_project
 			$crt_win->g_destroy;$mw->configure(-cursor=>"arrow");
 			my $batch;
 			if(!((-e "$Hproteome_file\.phr")and(-e "$Hproteome_file\.psq")and(-e "$Hproteome_file\.pin"))){
-			$batch="\"$formatdb_path\" -i \"$Hproteome_file\" -p T";
+			$batch="\"formatdb.exe\" -i \"$Hproteome_file\" -p T";
 				Tkx::tk___messageBox(-type => "ok",
 					-message => "BLAST database (*.phr,*.psq, *.pin) not found for $Hproteome_file. Use formatdb.exe to create it ",
 					-icon => "error", -title => "Input file Error");
@@ -2133,22 +2124,28 @@ sub create_project
 			$run_but->configure(-state=>"normal"); 
 			$front_page_status.="\n=>Project created:$root_path\n=>Target sequence: Tproteome_file\n=>Host proteome: $Hproteome_file\n=>Essential proteome:$Eproteome_file\n=>STRING ID mapping file:$PPI_id_map_file\n=>Select parameters from 'Settings' menu and Click on Run program.\n";
 			mkdir "$L_root_path", 0755;									##mkdir; WINDOWs specfic way //
+			
+			##Rename old files
+			#my @old =<$root_path\*>;
+			#foreach my $file (@old) {
+				#do stuff with $file
+			#	print STDERR "old files $file\n";
+			#}
+			#my @old=grep {/^.\_step-\d+\.txt/} readdir DIR;			
 			}
 			
 			$dwn_str_anal->entryconfigure("Broadspectrum analysis",-state=>"disabled");   ##$mw is accessible so, 
 			$dwn_str_anal->entryconfigure("GO analysis",-state=>"disabled");
 			$dwn_str_anal->entryconfigure("Sub-cellular localization",-state=>"disabled");
-		
-			
 			Tkx::update(); 
-		},);
-		$data_input_but->g_grid(-column=>1, -row=>10,-pady=>5,);
+		});
+		$data_input_but->g_grid(-column=>1, -row=>15,-padx=>5);
 		my $close_proj_but=$frm2->new_button(-text=>"Close",-width=>10,-command=>sub{unlink "$root_path//$project_name"; undef $root_path; undef $project_name; Tkx::update(); $crt_win->g_destroy;$mw->configure(-cursor=>"arrow");},);
-		$close_proj_but->g_grid(-column=>2, -row=>10,-padx=>2,-columnspan=>2,-sticky=>'w');
+		$close_proj_but->g_grid(-column=>2, -row=>15,-padx=>5,-sticky=>'w');
 	});	
-	$create_proj_but->g_grid(-column=>1, -row=>5,-pady=>10,-columnspan=>2);
+	$create_proj_but->g_grid(-column=>1, -row=>5,-pady=>10,-padx=>10);
 	my $close_proj_but=$frm1->new_button(-text=>"Close",-width=>18,-command=>sub{$crt_win->g_destroy;$mw->configure(-cursor=>"arrow");},);
-	$close_proj_but->g_grid(-column=>2, -row=>5,-padx=>10,-columnspan=>2);
+	$close_proj_but->g_grid(-column=>2, -row=>5,-pady=>10);
 }
 
 
@@ -2206,57 +2203,6 @@ sub settings
 	
 	my $apply_change=$frm1->new_button(-text=>"OK",-width=>8,-command=>sub {$crt_win->g_destroy;$mw->configure(-cursor=>"arrow");})->g_grid(-column=>0,-row=>25,-padx=>18,-pady=>12,-columnspan=>2,);
 	
-}
-
-sub executable_paths
-{
-	my $crt_win =$mw->new_toplevel();
-	$crt_win->g_wm_title("Binary file path");
-	#$mw->configure(-cursor=>"watch");
-	$crt_win->g_wm_attributes (-topmost=>1);
-	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
-	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
-	
-	$frm1->new_ttk__label(-text=>"BLAST bin path:")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>1,-sticky=>"nw");
-	$frm1 ->new_ttk__entry(-textvariable => \$blast_path,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1->new_ttk__button(-text=>"Choose location",-command=>sub{$blast_path = Tkx::tk___getOpenFile(-parent=>$crt_win);$crt_win->g_raise(); })->g_grid(-column=>3,-row=>1,-padx=>2,-pady=>1);
-	
-	$frm1->new_ttk__label(-text=>"CDhit bin path:")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>1,-sticky=>"nw");
-	$frm1 ->new_ttk__entry(-textvariable => \$cdhit_path,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1->new_ttk__button(-text=>"Choose location",-command=>sub{$cdhit_path = Tkx::tk___getOpenFile(-parent=>$crt_win);$crt_win->g_raise(); })->g_grid(-column=>3,-row=>2,-padx=>2,-pady=>1);
-	$frm1->new_ttk__label(-text=>"SqLite bin path:")->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>1,-sticky=>"nw");
-	$frm1 ->new_ttk__entry(-textvariable => \$sqlite_path,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>3,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1->new_ttk__button(-text=>"Choose location",-command=>sub{$sqlite_path = Tkx::tk___getOpenFile(-parent=>$crt_win);$crt_win->g_raise(); })->g_grid(-column=>3,-row=>3,-padx=>2,-pady=>1);
-	
-	my $apply_change=$frm1->new_button(-text=>"Apply",-width=>5,-command=>sub 
-		{
-		##Chek if exe files exits
-			if(!$blast_path ||!$cdhit_path||!$sqlite_path){
-				Tkx::tk___messageBox(-type => "ok",
-					-message => "Probably you forgot to specify a path.\n",
-					-icon => "error", -title => "Input file missing");
-					$crt_win->g_destroy;
-					&executable_paths();
-					return();
-				}
-			my $flg=1;
-			if(!(-e $blast_path)){Tkx::tk___messageBox(-type => "ok",-message => "$blast_path does not exits",
-						-icon => "error", -title => "File doesn't exits");$flg=0; }
-			if(!(-e $cdhit_path)){Tkx::tk___messageBox(-type => "ok",-message => "$cdhit_path does not exits",
-						-icon => "error", -title => "File doesn't exits");$flg=0;  }			
-			if(!(-e $sqlite_path)){Tkx::tk___messageBox(-type => "ok",-message => "$sqlite_path does not exits",
-						-icon => "error", -title => "File doesn't exits");$flg=0;  }
-			if($flg){$crt_win->g_destroy;$mw->configure(-cursor=>"arrow"); ($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=(win_path($blast_path),win_path($cdhit_path),win_path($formatdb_path),win_path($sqlite_path));   }
-			else{$crt_win->g_raise;}
-			
-		})->g_grid(-column=>1,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw");
-	my $apply_change=$frm1->new_button(-text=>"Reset",-width=>5,-command=>sub 
-		{
-		##Chek if exe files exits
-			my $flg=1;
-			($blast_path,$cdhit_path,$formatdb_path,$sqlite_path)=(win_path("$installation_path/executables/blastall.exe"),win_path("$installation_path/executables/cd-hit.exe"),winpath("$installation_path/executables/formatdb.exe"),win_path("$installation_path/executables/sqlite3.exe"));
-			
-		})->g_grid(-column=>2,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw");	
 }
 
 
@@ -2511,8 +2457,8 @@ sub util_PPI
 		##create the id mapping file
 		## create non-reduntant comma separated PPI file.
 		$PPI_blast_prg=5;
-		if(!-e unix_path($PPI_seq).".pin") { system(win_path($installation_path)."\\executables\\formatdb.exe -p T -i ".$PPI_seq);}
-		system(win_path($installation_path)."\\executables\\blastall.exe -p blastp -d $PPI_seq -i $pathogen_seq -m 8 -W 7 -b 1 -a $use_cores -o $output_dir\\PPI_blast.out");
+		if(!-e unix_path($PPI_seq).".pin") { system("formatdb.exe -p T -i ".$PPI_seq);}
+		system("blastall.exe -p blastp -d $PPI_seq -i $pathogen_seq -m 8 -W 7 -b 1 -a $use_cores -o $output_dir\\PPI_blast.out");
 		$PPI_blast_prg=50;	Tkx::update(); 
 		
 		my $mapped_hash = process_GO_BLAST_out(unix_path($output_dir."\\PPI_blast.out"),98);
@@ -2585,7 +2531,7 @@ sub add_to_broad_spectrum_db
 			my @l=split /\t/,$_;
 			if(!(-e unix_path($fasta_dir."\\$l[1]"))) { warn unix_path($fasta_dir."\\$l[1]"),"$fasta_dir\\$l[1] FASTA file for $l[0] Not found. Skip\n"; next;}
 			system ("copy $fasta_dir\\$l[1] PATHOGEN\ ");
-			system (win_path($installation_path)."\\executables\\formatdb.exe -p T -i $BLAST_DB_DIR\\$l[1]");
+			system ("formatdb.exe -p T -i $BLAST_DB_DIR\\$l[1]");
 			if (scalar @l <5) {warn "insufficient columns in line @l\nSkip.."; next;}
 			$l[5]=~s/'/`/g;
 		 my ($SuperKingdom,$phylum, $class, $order, $family, $genus) = split /;\s*/,$l[3];
@@ -2697,7 +2643,7 @@ sub add_a_drug_target_db
 		close F;
 		$drg_tar_prg=90;Tkx::update(); 
 		print STDERR (scalar @seq_id_with_all_annotations -$annots_no_seq_data)." records imported sucessfully\n";
-		system (win_path($installation_path)."\\executables\\formatdb.exe -p T -i ".win_path("$installation_path/local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta"));
+		system ("formatdb.exe -p T -i ".win_path("$installation_path/local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta"));
 		$drg_tar_prg=100;Tkx::update(); 
 		$crt_win->g_destroy();	
 	
@@ -2713,7 +2659,7 @@ sub fetch_tax_names
 {
 	my $level=shift;
 	my $sql="\"SELECT DISTINCT $level from taxonomy\"";
-	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
+	my $l=`sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
 	my @l = split /\n/,$l;
 	$l = join('} {',@l); $l = " {".$l."} ";
 	return ("$l",\@l);
@@ -2732,12 +2678,11 @@ sub create_broad_spe_db_array
 	$path=~ s{/}{\\}g; 
 	my $range = join ('\",\"',@$array); $range='(\"'.$range.'\")';
 	my $sql="\"SELECT fasta_file from taxonomy WHERE $tax_level IN $range\"";
-	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
+	my $l=`sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
 	my @l = split /\n/,$l;
 	
 	if($#l<0){
 	print STDERR "ERROR: No pathogen proteome found while reading data for Broad-spectrum analysis\n. Add Few using Utility menu\n";
-	print STDERR "press any  key to exit...\n"; <STDIN>; exit(1);
 	}
 	
 	my @db;
@@ -2769,7 +2714,6 @@ sub chk_GO_db
 	$sth->execute(); my $r = $sth->fetch()->[0];
 	if($r<1){
 	print STDERR "ERROR: No GO annotation found while reading data for go_term table\n. Add Few using Utility menu\n";
-	print STDERR "press any  key to exit...\n"; <STDIN>; exit(1);
 	}
 	
 	my $stmt = qq(SELECT  COUNT(*) FROM ecoli_go;);	#
@@ -2777,7 +2721,6 @@ sub chk_GO_db
 	$sth->execute(); my $r = $sth->fetch()->[0];
 	if($r<1){
 	print STDERR "ERROR: No E.coli GO annotation found while reading data for ecoli_go table \n. Add Few using Utility menu\n";
-	print STDERR "press any  key to exit...\n"; <STDIN>; exit(1);
 	}
 }
 
@@ -2873,7 +2816,7 @@ sub read_broad_spe_codes
 	
 	my %h;
 	my $sql="\"SELECT org_code,species from taxonomy\"";
-	my $l=`executables/sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
+	my $l=`sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
 	my @l = split /\n/,$l;
 	foreach(@l)
 	{
@@ -3268,6 +3211,17 @@ my $status = scalar (split /\n/,$ping)-1;
 return $status;
 }
 
+##Args:name of executable file
+##Retrns: 0/1
+sub check_executable_on_PATH
+{
+	my $p =shift;
+	my $r = `$p`; chomp($r); 
+	if($r=~m/is not recognised as /g){return 0;}
+	else{return 1}
+}
+
+
 
 ##ARGS
 ##returns:
@@ -3309,7 +3263,7 @@ sub add_ecoli_go_db
 		sleep 1;
 		my $fasta_file='local_dat/GO/UP000000625_83333_1.fasta';
 		$status='formatdb.exe'; Tkx::update();
-		system ("executables\\formatdb.exe -p T -i local_dat\\GO\\UP000000625_83333_1.fasta");
+		system ("formatdb.exe -p T -i local_dat\\GO\\UP000000625_83333_1.fasta");
 				
 		open (F,"<$fasta_file") or die "$! $fasta_file\n";
 		if($format eq 'uniprot'){
