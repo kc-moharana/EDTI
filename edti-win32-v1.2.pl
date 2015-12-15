@@ -1126,16 +1126,21 @@ sub broad_spect_run
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$input_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
-	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts
-	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	if($input_seq){
+		$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts
+		$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+		}	
 	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();
 	
-	if(!$root_path){$root_path=$L_root_path;}  							##if cancel pressed ; fail safe
-	$L_root_path=$root_path;													##preserve UNIX format
-	$root_path=~ s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+	if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
+	else{
+		$L_root_path=$root_path;													##preserve UNIX format
+		$root_path=~ s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+	}
+	
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
 	my $canvas = $new_frm->new_tk__canvas(-scrollregion => "0 0 1000 1000",-width=>400, -height=>200);
@@ -1312,15 +1317,19 @@ sub comp_known_DT
 		
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$input_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
-	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
-	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	if($input_seq){
+		$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
+		$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	  }	
 	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
-		if(!$root_path){$root_path=$L_root_path;}  							##if cancel pressed ; fail safe
-		$L_root_path=$root_path;													##preserve UNIX format
-		$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
+		else{
+			$L_root_path=$root_path;													##preserve UNIX format		
+			$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		}		
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
 	my $canvas = $new_frm->new_tk__canvas(-scrollregion => "0 0 500 500",-width=>400, -height=>200);
@@ -1467,21 +1476,27 @@ sub GO_analysis{
 		
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$background_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
-	$sequence_summary{-total_seq}=count_fasta_seq($background_seq); 					## reset total background_seq counts; not called if in project call
-	$background_seq=~ s{/}{\\}g; $background_seq='"'.$background_seq.'"'; 					##Convert to windows format
+	if($background_seq){
+		$sequence_summary{-total_seq}=count_fasta_seq($background_seq); 					## reset total background_seq counts; not called if in project call
+		$background_seq=~ s{/}{\\}g; $background_seq='"'.$background_seq.'"'; 					##Convert to windows format
+	}	
 	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$input_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
-	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
-	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	if($input_seq){
+		$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
+		$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	  }	
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
-		if(!$root_path){$root_path=$L_root_path;}  							##if cancel pressed ; fail safe
-		$L_root_path=$root_path;													##preserve UNIX format
-		$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
+		else{
+			$L_root_path=$root_path;													##preserve UNIX format
+			$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format			
+			}		
 	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
 	my $notebook = $new_frm->new_ttk__notebook;
@@ -1775,15 +1790,19 @@ sub subCellLoc_analysis
 		
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$input_seq = Tkx::tk___getOpenFile(-parent=>$mw);$mw->g_raise();  		## Assuming that no project defined;
-	$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq); 	## reset drug target counts; not called if in project call
-	$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	if($input_seq){
+		$sequence_summary{-putative_drug_targets}=count_fasta_seq($input_seq) ; 	## reset drug target counts; not called if in project call
+		$input_seq=~ s{/}{\\}g; $input_seq='"'.$input_seq.'"'; 					##Convert to windows format
+	}	
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$new_frm->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
-		if(!$root_path){$root_path=$L_root_path;}  							##if cancel pressed ; fail safe
-		$L_root_path=$root_path;													##preserve UNIX format
-		$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
+		else{
+			$L_root_path=$root_path;													##preserve UNIX format
+			$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		} 
 	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
 	$new_frm->new_ttk__label(-text=>"Progress:")->g_grid(-column=>0,-row=>3,-padx=>2,-pady=>5,-sticky=>"nw");
@@ -1799,10 +1818,6 @@ sub subCellLoc_analysis
 	$vscroll1->g_grid(-column => 5, -row => 5, -sticky => "ns");
 	$new_frm->new_ttk__sizegrip()->g_grid(-column => 5, -row => 6, -sticky => "se");
 	$canvas1->configure(-yscrollcommand => [$vscroll1, "set"], -xscrollcommand => [$hscroll1, "set"]);				
-				
-	
-	
-	
 	
 	$$run_button->configure(-state=>"normal", -command =>sub {
 			if(!$bacteria_strain || !$input_seq){ Tkx::tk___messageBox(-message => "Inputs not found!! "); 		return 0;}
@@ -1810,25 +1825,24 @@ sub subCellLoc_analysis
 			$$run_button->configure(-state=>"disabled");
 			
 			my $size = -s unix_path($input_seq); #print "Size=$size\n";
-			#my $all_inp_seq = read_fasta_sequence(unix_path($input_seq)); ## each seq assuming 2000bytes * 30 =60000
-			#my @split_file; my @all_ids= keys %$all_inp_seq;
-			#if(scalar (keys %$all_inp_seq)>30){  
-			#	my $f = int (scalar (keys %$all_inp_seq)/30); $f=(scalar (keys %$all_inp_seq)%3==0?$f:$f+1);
-			#	for (my  $h=0; $h<$f;$h++)
-			#	{
-			#		my @ids= splice(@all_ids,30*$h,30);
-			#		my $r=fetch_seq_by_id($all_inp_seq,\@ids);	##
-			#		write_fasta_seq($r,"$L_root_path/sub_file.txt");
-			#		psort_subcell($bacteria_strain, "$L_root_path/sub_file.txt", "$L_root_path/psort_subcellular_loc_result.txt");
-			#		$status="$h/$f processed";
-			#		Tkx::update();
-			#	}
+			my $all_inp_seq = read_fasta_sequence(unix_path($input_seq)); ## each seq assuming 2000bytes * 30 =60000
+			my @split_file; my @all_ids= keys %$all_inp_seq;
+			if(scalar (keys %$all_inp_seq)>30){  
+				my $f = int (scalar (keys %$all_inp_seq)/30); $f=(scalar (keys %$all_inp_seq)%3==0?$f:$f+1);
+				for (my  $h=0; $h<$f;$h++)
+				{
+					my @ids= splice(@all_ids,30*$h,30);
+					my $r=fetch_seq_by_id($all_inp_seq,\@ids);	##
+					write_fasta_seq($r,"$L_root_path/sub_file.txt");
+					psort_subcell($bacteria_strain, "$L_root_path/sub_file.txt", "$L_root_path/psort_subcellular_loc_result.txt");
+					$status="$h/$f processed";
+					Tkx::update();
+				}
 				
-			#}
-			#else{
-			#psort_subcell($bacteria_strain, unix_path($input_seq), "$L_root_path/psort_subcellular_loc_result.txt",\$status);
-			#}
-			
+			}
+			else{
+			psort_subcell($bacteria_strain, unix_path($input_seq), "$L_root_path/psort_subcellular_loc_result.txt",\$status);
+			}
 			Tkx::update();
 			
 			my %distribution;
@@ -1886,8 +1900,8 @@ sub subCellLoc_analysis
 			binmode IMG;
 			print IMG $gd->gif;
 			close IMG;	
-				Tkx::image_create_photo( "BP", -file => $L_root_path."/Subcellular_enrich.gif");
-				$canvas1->create_image(400, 0, -image=>"BP", -anchor =>'n' );
+			Tkx::image_create_photo( "BP", -file => $L_root_path."/Subcellular_enrich.gif");
+			$canvas1->create_image(400, 0, -image=>"BP", -anchor =>'n' );
 		});		
 }
 
