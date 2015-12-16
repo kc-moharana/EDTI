@@ -39,6 +39,7 @@ Following modules are need to be installed
 * Mon, Dec 14, 2015  10:45:00 PM : Sub-cellular localization;pSORT web-based added;
 * Tue, Dec 15, 2015  17:07:33 PM : GO enrich add datababase Utility;
 * Wed, Dec 16, 2015  02:11:53 AM : Executables in ENV PATH; NCBI tax id added; code fix update
+* Wed, Dec 16, 2015  07:11:01 PM : Major code fix; responsive Dialogs-box; broad spectrum cmd toolong fixed;near finish
 
 
 ## Futures supported/proposed
@@ -46,7 +47,7 @@ Following modules are need to be installed
   - [x] Import all inputs to create a single project
   - [x] All outputs in the same project
   - [ ] Import a runned project to rerun a uncomplete task
-  - [ ] Single sciprt must be sufficient to use
+  - [x] Single sciprt must be sufficient to use
 - [x] Putative Bactrial Drug targets
  - [x] Single-copy genes (CD-hit) + Non-host proteins(BLAST) + Essntial proteins (BLAST vs DEG)
  - [x] Single-copy genes (CD-hit) + Non-host proteins (BLAST) + Hub genes via Protein-protein interaction analysis (STRING)
