@@ -51,6 +51,9 @@ our $interactome_file;	## Interaction file , atleast three columns,ProteinA-Prot
 our ($skip_cdHit,$skip_host_BLAST)=(0,0);	## Trun on if want to skip steps
 our $taxon_id;			## NCBI taxon id; trash
 our $setup_error;		## Hold error messages if run for the first time;
+our $cmd_hide=1;	##System prefre, batch query run cmd; update by reading sys_conf_file
+our $wlc_msg_show=1;
+our $blast_version='old_blastall';	##non-funtional
 
 our $project_name="New_Project";	
 our $root_path=	get_my_document_path();		#getcwd();##update later
@@ -83,53 +86,91 @@ our $chk_cdhit=1;
 ## MAKING SCRIPT MORE INDEPENDANT
 print STDERR "File setting:\n";
 
-if(! -d $installation_path."/executables/"){ print STDERR "\t".$installation_path."/executables/ : directory Not found. Creating one."; mkdir  $installation_path."/executables/", 0755}
-if(! -d $installation_path."/local_dat/"){ print STDERR "\t".$installation_path."/local_dat/ : directory Not found. Creating one."; mkdir  $installation_path."/local_dat/", 0755}
+if(! -d "executables"){ print STDERR "\t".$installation_path."/executables/ : directory Not found. Creating one.\n"; mkdir  "./executables", 0755}
+if(! -d "local_dat/"){ print STDERR "\t".$installation_path."/local_dat/ : directory Not found. Creating one.\n"; mkdir  "./local_dat", 0755}
 
 ##Making it on path
-my $EXEC_PATH = win_path($installation_path."/executables/");
+my $EXEC_PATH = win_path($installation_path."/executables");
 $EXEC_PATH =~s/\"//g;
 $ENV{'PATH'}.=';'.$EXEC_PATH;
 
-if(!check_executable_on_PATH("blastall --help")){ print STDERR "\nERROR: blastall.exe not found on PATH\n"; exit(1)}
-if(!check_executable_on_PATH("cd-hit -help")){ print STDERR "\nERROR: ch-hit.exe not found on PATH"; exit(1)}
-if(!check_executable_on_PATH("sqlite3 -version")){ print STDERR "\nERROR: sqlite3.exe not found on PATH"; exit(1)}
-if(!check_executable_on_PATH("formatdb --help")){ print STDERR "\nERROR: formatdb.exe not found on PATH"; exit(1)}
-
-if(! -d $installation_path."/local_dat/PATHOGENS"){ 
-print STDERR "\t".$installation_path."/local_dat/PATHOGENS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/PATHOGENS", 0755; 
-system ("sqlite3 ".win_path($installation_path."/local_dat/PATHOGENS").'\pathogen_taxonomy.db  "Create table taxonomy (	fasta_file VARCHAR(40) Primary Key,	ORG_CODE VARCHAR (10),	species VARCHAR (100),	TaxID INT(10),	SuperKingdom VARCHAR(50),	phylum VARCHAR(50),	class VARCHAR(50),	order_ VARCHAR(50),	family VARCHAR(50),	genus VARCHAR(50),	Description TEXT NULL);"');
-$setup_error.="*** Add Pathogen complete proteomes for \nbroad-spectrum analysis using Utility menu\n\n\n";
+if(!(-e "HideCmd.vbs")){ 
+	open (O, ">HideCmd.vbs") or die "$! HideCmd.vbs\n";
+	print O '
+Set objShell = CreateObject("WScript.Shell") 
+Set objEnv = objShell.Environment("process")
+ 
+\'What we want to add
+PathToAdd = "'.$EXEC_PATH.'" 
+\'Set the new Path
+objEnv("PATH") = PathToAdd
+\'Now get the bat file and run it without shownfg Command window
+objShell.Run """" & WScript.Arguments(0) & """", 0, False	
+';
+	close O;
 }
-if(! -d $installation_path."/local_dat/KNOWN_DRUG_TARGETS"){ print STDERR "\t".$installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/KNOWN_DRUG_TARGETS", 0755;system('echo >'.win_path("$installation_path/local_dat/drugTarget_db_names.txt"));}
-if(! -d $installation_path."/local_dat/GO"){ print STDERR "\t".$installation_path."/local_dat/GO : directory Not found. Creating one.\n\n"; mkdir  $installation_path."/local_dat/GO", 0755;
+
+
+
+if(!check_executable_on_PATH("blastall --help")){ print STDERR "\nERROR: blastall.exe not found on PATH.\nPlease download ncbi blastall.exe and put it in ENVIORNMENT PATH or 'executables' directory.EXIT\n"; exit(1)}
+if(!check_executable_on_PATH("cd-hit -help")){ print STDERR "\nERROR: ch-hit.exe (or cygwin1.dll) not found on PATH.\nPlease download cd-hit.exe and cygwin1.dll; and put it in ENVIORNMENT PATH or 'executables' directory.EXIT"; exit(1)}
+if(!check_executable_on_PATH("sqlite3 -version")){ print STDERR "\nERROR: sqlite3.exe not found on PATH\n.Please download sqlite3.exe and put it in ENVIORNMENT PATH or 'executables' directory.EXIT"; exit(1)}
+if(!check_executable_on_PATH("formatdb --help")){ print STDERR "\nERROR: formatdb.exe not found on PATH.\nPlease download ncbi formatdb.exe and put it in ENVIORNMENT PATH or 'executables' directory.EXIT"; exit(1)}
+
+if(! -d "./local_dat/PATHOGENS"){ 
+print STDERR "\t/local_dat/PATHOGENS : directory Not found. Creating one.\n\n"; mkdir  "local_dat/PATHOGENS", 0755; 
+system ('sqlite3.exe local_dat/PATHOGENS/pathogen_taxonomy.db  "CREATE TABLE taxonomy (	fasta_file VARCHAR(40) Primary Key,	ORG_CODE VARCHAR (10),	species VARCHAR (100),	TaxID INT(10),	SuperKingdom VARCHAR(50),	phylum VARCHAR(50),	class VARCHAR(50),	order_ VARCHAR(50),	family VARCHAR(50),	genus VARCHAR(50),	Description TEXT NULL);"');
+$setup_error.="*** Add Pathogen complete proteomes for broad-spectrum \nanalysis using Utility menu\n\n\n";
+}
+if(! -d "./local_dat/KNOWN_DRUG_TARGETS"){ print STDERR "\t".$installation_path."/local_dat/KNOWN_DRUG_TARGETS : directory Not found. Creating one.\n\n"; mkdir  "local_dat/KNOWN_DRUG_TARGETS", 0755;
+open(D,"> local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt" )or die "$! local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt"; close D;
+}
+if(! -d "./local_dat/GO"){ print STDERR "\t".$installation_path."/local_dat/GO : directory Not found. Creating one.\n\n"; mkdir  "local_dat/GO", 0755;
 }
 if(!-e "local_dat/GO/GO.db"){
 print STDERR "\t".$installation_path."/local_dat/GO/GO.db : file Not found. Creating one.\n\n";
-system ("sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
-system ("sqlite3 ".win_path($installation_path."/local_dat/GO").'\GO.db "CREATE TABLE ecoli_go (	GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(8));"'); 
-$setup_error.="*** Add GO annotation using Utility menu\n\n\n";
+system ('sqlite3 local_dat/GO/GO.db "CREATE TABLE go_term (	GO_id VARCHAR(10) PRIMARY KEY,	ontology_category VARCHAR(20),	term VARCHAR(150));"');
+system ('sqlite3 local_dat/GO/GO.db "CREATE TABLE ecoli_go (GO_id VARCHAR(10) ,	ecoli_ac VARCHAR(8));"'); 
+$setup_error.="*** Add E.coli GO annotations using Utility menu. Refer manual for details\n\n\n";
+}
+
+if(!(-e "local_dat/sys_conf")){ print STDERR "\tlocal_dat/sys_conf file not found!!!.Creating..\n";
+	open (O, "> local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
+	print O "SYS_CONF_HIDE_CMD_PROMPT= 1\n";
+	print O "SYS_CONF_SHOW_WELCOME_MSG= 1\n";
+	print O "SYS_CONF_BLAST_VER= $blast_version\n";		##Change later static dafault value
+	close O;
 }
 
 
+print STDERR "Reading System preference:";
+open (S, "<local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
+while(<S>)
+{
+	chomp; 
+	if(/^SYS_CONF_HIDE_CMD_PROMPT=\s+([01]+)/){$cmd_hide=$1;}
+	elsif(/^SYS_CONF_SHOW_WELCOME_MSG=\s+([01]+)/){$wlc_msg_show=$1}
+	elsif(/^SYS_CONF_BLAST_VER=\s+(\S+)/){ $blast_version =$1}
+}
+close S;
+print STDERR "DONE\n";
 print STDERR "Reading drug Target data:";
-our $drug_db_names=read_drugTarget_db("$installation_path/local_dat/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
+our $drug_db_names=read_drugTarget_db("./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
 our $ref_drug_db_array=[];
-open(G,"$installation_path/local_dat/drugTarget_db_names.txt") or die"$!$installation_path/local_dat/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
-our $drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
-our $drug_target_annot=read_drugTarget_annot("$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+open(G,"./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt") or die"$! ./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
+our $drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"./local_dat/KNOWN_DRUG_TARGETS");
+our $drug_target_annot=read_drugTarget_annot("./local_dat/KNOWN_DRUG_TARGETS");
 print STDERR "DONE";
 
 print STDERR "\nReading broad-spectrum data:";
-our $broad_spectrum_pathogen_db_sq = win_path($installation_path."\\local_dat\\pathogen_taxonomy.db");
+our $broad_spectrum_pathogen_db_sq = win_path($installation_path.'\local_dat\PATHOGENS\pathogen_taxonomy.db');
 ##'"\"PATHOGENS\" "PATHOGENS\ACIBC" "PATHOGENS\ACIBS" "PATHOGENS\ACIBT" "PATHOGENS\BURM1\""';##read files to update it;
 our $broad_spe_species_per_query=0;
-our $broad_spe_org_code_full_name=read_broad_spe_codes();				##deccrypt	#("$installation_path/local_dat/BROADSPECTRUM_CODE_ANNOTATION.txt");#Stores hash ref
 our $tax_level="Family";
 our $brd_sp_db_levels;
 our $ref_brd_sel_db_array=[]; ## array ref ; array saves  tax_levels sel by user			
 ($brd_sp_db_levels,$ref_brd_sel_db_array) = fetch_tax_names($tax_level);		
-our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");
+our $broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"./local_dat/PATHOGENS");
 print STDERR "DONE\n";
 
 our $PPI_score_cutoff=700;		##STRING score cutoff
@@ -144,7 +185,7 @@ our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_
 ###Variable for Ontology analysis
 #params for finding sismilarity with E.coli
 our $model_org_ref_proteome = win_path($installation_path."\\local_dat\\GO\\UP000000625_83333.fasta");		##E.coli is used as refernce for all ontology analaysis
-our $GO_db = $installation_path."/local_dat/GO/GO.db";		##contains two tables ecoli_go, go_terms
+our $GO_db = "./local_dat/GO/GO.db";		##contains two tables ecoli_go, go_terms
 #our $model_org_ref_proteome_GO = process_GO_db($installation_path."/local_dat/GO/UP000000625_83333.GO.txt");		##E.coli is used as refernce for all ontology analaysis ; stores ref hash
 
 chk_GO_db();		##Checking GO data in tables;
@@ -288,10 +329,13 @@ $mw->g_bind("<Control-n>", sub{create_project()} );
 #$file->add_command(-label => "Save Project",-underline=>0, -command => sub {});	
 $file->add_command(-label => "Quit",-underline=>0, -accelerator=>"Alt+F4",-command => sub {system("del $root_path\\*.tmp"); exit(1);});
 
-$settings->add_command(-label => "Open settings",-underline=>1, -accelerator=>"Ctrl+s",-command =>\&settings);
+$settings->add_command(-label => "Pipeline settings",-underline=>1, -accelerator=>"Ctrl+s",-command =>\&settings);
 $mw->g_bind("<Control-s>", sub{settings()} );
 $settings->add_command(-label => "Down-stream analysis",-underline=>1, -accelerator=>"Ctrl+d",-command =>\&down_str_anal);
 $mw->g_bind("<Control-d>", sub{down_str_anal()} );
+$settings->add_command(-label => "System preferences",-underline=>1, -accelerator=>"Ctrl+e",-command =>\&sys_preferences);
+$mw->g_bind("<Control-e>", sub{sys_preferences()} );
+
 
 
 $dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>1, -accelerator=>"Ctrl+b",-command =>sub {});	## functions updated later
@@ -414,7 +458,7 @@ $mw->g_bind("<Control-l>", sub{subCellLoc_analysis(\$frnt,\$run_but)} );
 
 Tkx::update();
 
-welcome_message();
+welcome_message() if $wlc_msg_show;
 
 if($setup_error){
 Tkx::tk___messageBox(-title=>"Metadata not found",-message => $setup_error);
@@ -573,7 +617,9 @@ sub main_script
 			`echo cd-hit.exe -i $root_path\\accepted_seq_step-1.fasta -o $root_path\\cdHit_out -d 0 -c $cdHit_c -n 3 >> batch.bat`;
 			`echo rename $root_path\\cdHit_out.clstr cdHit_out.clstr.txt >> batch.bat`;	##mv works
 			`echo exit >> batch.bat`;
-			system("start batch.bat ");
+			
+			if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+			else{system("start batch.bat ");}
 			
 			while(!(-e "$L_root_path/cdHit_out.clstr.txt")){Tkx::update(); sleep(1); $cdhit_prg=25;}	##wait till cdHit_out.clstr.txt is available
 			
@@ -627,7 +673,8 @@ sub main_script
 					`echo $blast1 >> batch.bat`;
 					`echo rename $root_path\\host_orthologs_blast1.out host_orthologs_blast1.out.txt >> batch.bat`;	##mv works
 					`echo exit >> batch.bat`;
-					system("start batch.bat ");
+					if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+					else{system("start batch.bat ");}
 
 			while(!(-e "$L_root_path/host_orthologs_blast1.out.txt")){
 					##wait till human_orthologs_blast1.out.txt is available
@@ -739,7 +786,9 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			print S "del import.sql  \n";
 			print S "exit  \n";
 			close S;
-			system("start batch.bat ");
+			if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+			else{system("start batch.bat ");}
+			
 			while(-e "import.sql"){	$string_srch_prg=5;Tkx::update();sleep(1);	}
 			$string_srch_prg=35;Tkx::update();
 
@@ -861,7 +910,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 .separator ,
 .import \"componenet.txt\" tmp2";
 						close S;
-						system("formatdb.exe $database < import.sql");
+						system("sqlite3.exe $database < import.sql");
 						$node_componenet_index_tograph{$i_cc} = Graph::Undirected->new();	##storing graph for that index
 						
 						my $stmt = qq(select PPI.proteinA, PPI.proteinB from PPI INNER JOIN tmp2 where ((tmp2.proteinA=PPI.proteinA) AND (tmp2.proteinB=PPI.proteinB)) AND PPI.score >=$PPI_score_cutoff);	##LIMIT 1500
@@ -1058,7 +1107,8 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 				`echo $blast2 >> batch.bat`;
 				`echo rename $root_path\\essential_protein_blast2.out essential_protein_blast2.out.txt >> batch.bat`;	##mv works
 				`echo exit >> batch.bat`;
-				system("start batch.bat ");
+				if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+				else{system("start batch.bat ");}
 
 				while(!(-e "$L_root_path/essential_protein_blast2.out.txt")){
 				#print "$blast_prg2  $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-orthologous})--\n";
@@ -1150,8 +1200,9 @@ sub broad_spect_run
 	
 	if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
 	else{
+		$root_path =~s/"//g;														##incase of Default Desktop path
 		$L_root_path=$root_path;													##preserve UNIX format
-		$root_path=~ s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		$root_path=win_path($root_path); 						##Convert to windows format	
 	}
 	
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");	
@@ -1226,7 +1277,8 @@ sub broad_spect_run
 	`echo rename $root_path\\broad_spe_blast3.out.f broad_spe_blast3.out.txt >> batch.bat`;	##mv works
 	`echo exit >> batch.bat`;
 	
-	system("start batch.bat ");
+	if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+	else{system("start batch.bat ");}
 	
 	$blast_prg3=0;
 	while(!(-e "$L_root_path/broad_spe_blast3.out.txt")){
@@ -1250,7 +1302,6 @@ sub broad_spect_run
 		my (@query_id,@cons_counts,@bar_dclrs);
 		my $total_hits=0;
 		foreach my $t(sort { $broad_spec_counts{$b} <=> $broad_spec_counts{$a} } keys %broad_spec_counts ){
-		#print "ids: $t".$broad_spe_org_code_full_name->{$t}."\n";
 			push (@query_id,$t);
 			push (@cons_counts,$broad_spec_counts{$t});
 			push @bar_dclrs,'black';
@@ -1368,8 +1419,9 @@ sub comp_known_DT
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
 		if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
 		else{
-			$L_root_path=$root_path;													##preserve UNIX format		
-			$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		$root_path =~s/"//g;														##incase of Default Desktop path
+		$L_root_path=$root_path;													##preserve UNIX format
+		$root_path=win_path($root_path); 						##Convert to windows format	
 		}		
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
@@ -1416,7 +1468,8 @@ sub comp_known_DT
 				`echo rename $root_path\\drug_target_blast4.out drug_target_blast4.out.txt >> batch.bat`;	##mv works
 				`echo exit >> batch.bat`;
 				
-				system("start batch.bat ");
+				if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+				else{system("start batch.bat ");}
 				
 				while(!(-e "$L_root_path/drug_target_blast4.out.txt")){
 				$blast_prg4=blast_progress("$root_path\\drug_target_blast4.out","$L_root_path/drug_target_blast4.out",$sequence_summary{-putative_drug_targets} ); sleep(3); Tkx::update(); 
@@ -1535,8 +1588,9 @@ sub GO_analysis{
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
 		if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
 		else{
+			$root_path =~s/"//g;														##incase of Default Desktop path
 			$L_root_path=$root_path;													##preserve UNIX format
-			$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format			
+			$root_path=win_path($root_path); 						##Convert to windows format				
 			}		
 	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
@@ -1629,7 +1683,8 @@ sub GO_analysis{
 				`echo rename $root_path\\E_coli_ortho_blast5.out E_coli_ortho_blast5.out.txt >> batch.bat`;	##mv works
 				`echo exit >> batch.bat`;
 				
-				system("start batch.bat ");
+				if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+				else{system("start batch.bat ");}
 				
 				while(!(-e "$L_root_path/E_coli_ortho_blast5.out.txt")){
 				$blast_prg5=blast_progress("$root_path\\E_coli_ortho_blast5.out","$L_root_path/E_coli_ortho_blast5.out",$sequence_summary{-total_seq} ); sleep(3); Tkx::update(); 
@@ -1841,8 +1896,9 @@ sub subCellLoc_analysis
 		$root_path = Tkx::tk___chooseDirectory(-parent=>$mw);$mw->g_raise();		
 		if(!$root_path){$root_path=win_path($L_root_path);}  							##if cancel pressed ; fail safe
 		else{
-			$L_root_path=$root_path;													##preserve UNIX format
-			$root_path=~s{/}{\\}g; $root_path='"'.$root_path.'"'; 						##Convert to windows format	
+		$root_path =~s/"//g;														##incase of Default Desktop path
+		$L_root_path=$root_path;													##preserve UNIX format
+		$root_path=win_path($root_path); 						##Convert to windows format		
 		} 
 	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");	
 	
@@ -2098,6 +2154,7 @@ sub create_project
 		my $create_proj_but=$frm1->new_button(-text=>"Create project",-width=>18,-command=>sub{
 		
 		$root_path.="\\$project_name";												##updating root path
+		$root_path =~s/"//g;														##incase of Default Desktop path
 		$root_path=win_path($root_path);
 		$L_root_path=unix_path($root_path);											##preserve UNIX format; fail safe
 		if(-d $L_root_path){
@@ -2147,16 +2204,18 @@ sub create_project
 		$frm3->new_ttk__checkbutton(-text => "Skip CH-HIT",-variable => \$skip_cdHit, -onvalue =>1, -offvalue =>0)->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>2,-sticky=>"nw");
 		$frm3->new_ttk__checkbutton(-text => "Skip Host paralog BLAST",-variable => \$skip_host_BLAST, -onvalue =>1, -offvalue =>0)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>2,-sticky=>"nw");
 		
+		my $species_name="";
 		$frm3->new_ttk__label(-text=>"NCBI Taxon id	:")->g_grid(-column=>0, -row=>4,-padx=>2,-pady=>1,-sticky=>"e");
 		$frm3 ->new_ttk__entry(-textvariable => \$taxon_id,-width=>20,)->g_grid(-column=>1,-row=>4,-padx=>2,-pady=>0,-sticky=>"w");
 		$frm3->new_ttk__button(-text=>"Validate",-width=>10,-command=>sub{
-		
+			$species_name="wait..."; Tkx::update();
 			my $url = 'http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id='.$taxon_id;
-			my $content = get $url;  die "Couldn't get $url" unless defined $content;
+			my $content = get $url;  die "Couldn't get $url . Check Internet" unless defined $content;
 			my @content=split /\n/,$content;
-			foreach(@content){if(/Taxonomy\s+browser\s+\((.+)\)/g){$taxon_id=$taxon_id.": $1";}}
+			foreach(@content){if(/Taxonomy\s+browser\s+\((.+)\)/g){$species_name="$1";}}
 			Tkx::update();		
 		})->g_grid(-column=>4,-row=>4,-padx=>2,-pady=>0,-sticky=>"w");
+		$frm3->new_ttk__label(-textvariable=>\$species_name)->g_grid(-column=>5, -row=>4,-padx=>2,-pady=>1,-sticky=>"e");
 		
 		my $data_input_but=$frm2->new_button(-text=>"Ok",-width=>10,-command=>sub{
 			if(!$Tproteome_file ||(!$Hproteome_file && !$skip_host_BLAST)){
@@ -2192,7 +2251,7 @@ sub create_project
 			$dwn_str_anal->entryconfigure("GO analysis",-state=>"disabled");
 			$dwn_str_anal->entryconfigure("Sub-cellular localization",-state=>"disabled");
 			Tkx::update(); 
-			Tkx::tk___messageBox(-message => "Project $project_name created.\n\nUse settings menu to change default settings.", -title=>"Success", -parent=>$mw);	
+			Tkx::tk___messageBox(-message => "Project $project_name created.\n\nUse settings menu to change default settings and Press Run button.", -title=>"Success", -parent=>$mw);	
 		});
 		$data_input_but->g_grid(-column=>1, -row=>15,-padx=>5);
 		my $close_proj_but=$frm2->new_button(-text=>"Close",-width=>10,-command=>sub{unlink "$root_path//$project_name"; undef $root_path; undef $project_name; Tkx::update(); close_tool_window($crt_win,$mw)});
@@ -2429,7 +2488,7 @@ sub down_str_anal
 			if(scalar@idx ==1){@sel=()}						## fix if a single is clicked
 			foreach my $u(@idx){push @sel,@{$sel_entries}[$u];}
 			$ref_brd_sel_db_array=\@sel;
-			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"$installation_path/local_dat/PATHOGENS");	
+			$broad_spectrum_pathogen_db_list=create_broad_spe_db_array($ref_brd_sel_db_array,"./local_dat/PATHOGENS");	
 		});	
 	
 	
@@ -2443,7 +2502,7 @@ sub down_str_anal
 			my @idx = $lbox2->curselection;
 			$sel_drug_tar_db=join(",",@idx);
 			$ref_drug_db_array=\@idx;
-			$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"$installation_path/local_dat/KNOWN_DRUG_TARGETS");
+			$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"./local_dat/KNOWN_DRUG_TARGETS");
 	
 		});
 	$frm1->new_ttk__label(-text=>"BLAST settings against drug-target database:",)->g_grid(-column=>0,-row=>20,-padx=>2,-pady=>5,-sticky=>"nw");	
@@ -2458,16 +2517,41 @@ sub down_str_anal
 	
 	},)->g_grid(-column=>1,-row=>21,-padx=>2,-pady=>5,-sticky=>"nw",-columnspan=>2);
 	
-	
-	
-	
-	
-	
 	my $ok=$frm1->new_button(-text=>"Close",-width=>10,-command=>sub 
 		{
 		$crt_win->g_destroy();close_tool_window($crt_win,$mw);
 		})->g_grid(-column=>0,-row=>30,-padx=>1,-pady=>5,-sticky=>"ne");	
 }
+
+##Args:
+##Returns:
+sub sys_preferences
+{
+	my $crt_win =$mw->new_toplevel();
+	$crt_win->g_wm_title("System preference Settings");
+	open_tool_window($crt_win,$mw);
+	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
+	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
+	
+	
+	$frm1->new_ttk__checkbutton(-text => " Hide command prompt on external tool run",-variable => \$cmd_hide, -onvalue =>1, -offvalue =>0)->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>2,-columnspan=>2,-sticky=>"news");
+	$frm1->new_ttk__checkbutton(-text => "Show welcome message at program start",-variable => \$wlc_msg_show, -onvalue =>1, -offvalue =>0)->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>2,-columnspan=>2,-sticky=>"news");
+	$frm1->new_ttk__label(-text=>"BLAST verion (Not working): ",)->g_grid(-column=>0,-row=>3,-padx=>1,-pady=>5,-sticky=>"nw");	
+	$frm1->new_ttk__combobox(-textvariable =>\$blast_version ,-values=> "old_blastall new_blast+", -width=>12,-state=>'readonly')->g_grid(-column=>1,-row=>3,-padx=>2,-pady=>1,-sticky=>"nw");
+	
+	
+	my $ok=$frm1->new_button(-text=>"Close",-width=>10,-command=>sub 
+		{
+		$crt_win->g_destroy();close_tool_window($crt_win,$mw);
+		open (O, ">./local_dat/sys_conf") or die "$! ./local_dat/sys_conf\n";
+		print O "SYS_CONF_HIDE_CMD_PROMPT= $cmd_hide\n";
+		print O "SYS_CONF_SHOW_WELCOME_MSG= $wlc_msg_show\n";
+		print O "SYS_CONF_BLAST_VER= $blast_version\n";
+		close O;		
+		})->g_grid(-column=>0,-row=>30,-padx=>1,-pady=>5,-sticky=>"ne");	
+}
+
+
 
 
 
@@ -2503,7 +2587,12 @@ sub util_PPI
 	
 	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
 	$PPI_seq = Tkx::tk___getOpenFile(-parent=>$crt_win);
+	
 	$PPI_seq=win_path($PPI_seq) if $PPI_seq; 							##Convert to windows format
+	if($PPI_seq=~m/\s/g){Tkx::tk___messageBox(-message => "Input file $PPI_seq contains space. Cannot use it in Formatdb program. Please provide a non-space file path", -icon=>'warning', -type=>"ok", -title=>"Alert");
+	$PPI_seq="";
+	}
+	
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
@@ -2582,23 +2671,33 @@ sub add_to_broad_spectrum_db
 		$fasta_dir = win_path($fasta_dir) if $fasta_dir;		
 	})->g_grid(-column=>4,-row=>1,-padx=>1,-pady=>1,-sticky=>"wn");	
 	
-	my $brd_proc_prg=0; my $c=0;
-	my $total_lines =0; 
-	$total_lines = int `findstr /R /N "^" $taxonomy_file | find /C ":"`  if $taxonomy_file; 
+	my $brd_proc_prg=0; my $c=0; my $total_lines;
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-	
 		if (!$taxonomy_file || !$fasta_dir){ Tkx::tk___messageBox(-message => "ERROR: Input file missing", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_to_broad_spectrum_db(); return 0;}
+		
+	my $brd_proc_prg=0; my $c=0;
+	open (FILE, $taxonomy_file) or die "$! $taxonomy_file";
+	 $total_lines =@{[<FILE>]};
+	close FILE;
+	#$total_lines = `findstr /R /N "^" $taxonomy_file | find /C ":"` ; 
+	#chomp($total_lines);
 	
 		my $BLAST_DB_DIR='PATHOGENS';
-		my $database = $installation_path.'/local_dat/pathogen_taxonomy.db';
+		my $database = './local_dat/PATHOGENS/pathogen_taxonomy.db';
 		
 		open (T, "< $taxonomy_file") or die "$! $taxonomy_file";
 		while(<T>){
 			chomp;
 			next if /^#/;
+			~s/'//g;
 			my @l=split /\t/,$_;
 			if(!(-e unix_path($fasta_dir."\\$l[1]"))) { warn unix_path($fasta_dir."\\$l[1]"),"$fasta_dir\\$l[1] FASTA file for $l[0] Not found. Skip\n"; next;}
-			system ("copy $fasta_dir\\$l[1] PATHOGEN\ ");
+			open (L,unix_path($fasta_dir."\\$l[1]")) or die "$! $fasta_dir\\$l[1]";
+			while(<L>){if(/^>(\S+)/){my ($a,$b,$c)= split /\|/,$1; my ($a,$b) = split /\_/,$c;  if($l[0]=~m/(\S+)\.\w+$/g){ if($1 ne $b){warn "Fasta header does not match file name: $1 ne $b\nTypically Uniprot proteome files expected\nExample: \nFASTA header:tr|Q6FCC9|Q6FCC9_ACIAD\nFile name: ACIAD.fasta. ";}  }  last;} }
+			close L;
+			##tr|Q6FCC9|Q6FCC9_ACIAD format is fixed;  put exit if not met
+			
+			copy unix_path($fasta_dir."\\$l[1]"), "./local_dat/PATHOGENS/$l[1]";			
 			system ("formatdb.exe -p T -i $BLAST_DB_DIR\\$l[1]");
 			if (scalar @l <5) {warn "insufficient columns in line @l\nSkip.."; next;}
 			$l[5]=~s/'/`/g;
@@ -2615,12 +2714,13 @@ sub add_to_broad_spectrum_db
 		}
 		close T;
 		close_tool_window($crt_win,$mw);
+		Tkx::tk___messageBox(-message => "$total_lines imported successfully", -type=>"ok", -title=>"Success", -icon=>'info'); 
 	
 	});
 	$run_but->g_grid(-column=>0, -row=>6,-padx=>5,-sticky=>"w");
 	my $brd_sp_add=$frm1->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$brd_proc_prg);
 	$brd_sp_add -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
-
+	
 
 }
 
@@ -2697,27 +2797,37 @@ sub add_a_drug_target_db
 		print STDERR "sequences with no annotation: $seq_no_annot\nAnnotations with no sequence data: $annots_no_seq_data\n";
 
 		my $r=fetch_seq_by_id($all_seq,\@seq_id_with_all_annotations);
-		write_fasta_seq($r,"$installation_path/local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
+		write_fasta_seq($r,"./local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
 		$drg_tar_prg=55;Tkx::update(); 
-		open(F,">> $installation_path/local_dat/$BLAST_DB_DIR/$prefix\_targets_annot.txt") or die "$! $installation_path/local_dat/$BLAST_DB_DIR/$prefix\_targets_annot.txt";
+		open(F,">> ./local_dat/$BLAST_DB_DIR/$prefix\_targets_annot.txt") or die "$! ./local_dat/$BLAST_DB_DIR/$prefix\_targets_annot.txt";
 		$"="\n";
 		print F "@annotations_with_seq_data";
 		close F;
 		$drg_tar_prg=70;Tkx::update(); 
-		open(F,">> $installation_path/local_dat/$BLAST_DB_DIR/$database") or die "$! $installation_path/local_dat/$BLAST_DB_DIR/$database";
+		open(F,">> ./local_dat/$BLAST_DB_DIR/$database") or die "$! ./local_dat/$BLAST_DB_DIR/$database";
 		$"="\n";
 		print F "$prefix\n";
 		close F;
 		$drg_tar_prg=90;Tkx::update(); 
 		print STDERR (scalar @seq_id_with_all_annotations -$annots_no_seq_data)." records imported sucessfully\n";
-		system ("formatdb.exe -p T -i ".win_path("$installation_path/local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta"));
+		system ("formatdb.exe -p T -i $BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
+		
 		$drg_tar_prg=100;Tkx::update(); 
-		open_tool_window($crt_win,$mw);	
+		close_tool_window($crt_win,$mw);
+		
+		$drug_db_names=read_drugTarget_db("./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	
+		$ref_drug_db_array=[];
+		open(G,"./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt") or die"$!./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
+		$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"./local_dat/KNOWN_DRUG_TARGETS");
+		$drug_target_annot=read_drugTarget_annot("./local_dat/KNOWN_DRUG_TARGETS");		
+		Tkx::update(); 
+		Tkx::tk___messageBox(-message => "$prefix added successfully", -type=>"ok", -title=>"Success", -icon=>'info'); 
 	
 	});
 	$run_but->g_grid(-column=>0, -row=>6,-padx=>5,-sticky=>"w");
 	my $drg_tar_add=$frm1->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$drg_tar_prg);
 	$drg_tar_add -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
+	
 }
 
 
@@ -2745,14 +2855,14 @@ sub create_broad_spe_db_array
 	my $db_list;
 	$path=~ s{/}{\\}g; 
 	my $range = join ('\",\"',@$array); $range='(\"'.$range.'\")';
-	my $sql="\"SELECT fasta_file from taxonomy WHERE $tax_level IN $range\"";
+	my $e= ($taxon_id? " AND TaxID != $taxon_id":"");
+	my $sql="\"SELECT fasta_file from taxonomy WHERE $tax_level IN $range $e\"";
 	my $l=`sqlite3.exe $broad_spectrum_pathogen_db_sq $sql`;	
 	my @l = split /\n/,$l;
 	
 	if($#l<0){
 	print STDERR "ERROR: No pathogen proteome found while reading data for Broad-spectrum analysis\n. Add Few using Utility menu\n";
-	$setup_error.="*** No pathogen proteome found while reading data \
-	nfor Broad-spectrum analysis. Add Few using Utility menu\n\n\n";
+	$setup_error.="*** No pathogen proteome found while reading data for Broad-spectrum analysis.\nAdd Few using Utility menu\n\n\n";
 	}
 	
 	my @db;
@@ -2795,7 +2905,7 @@ sub chk_GO_db
 	$sth->execute(); my $r = $sth->fetch()->[0];
 	if($r<1){
 	print STDERR "ERROR: No E.coli GO annotation found while reading data for ecoli_go table \n. Add Few using Utility menu\n";
-	$setup_error.="*** No E.coli GO annotation found \nwhile reading data for ecoli_go table. Add Few using Utility menu\n\n\n";
+	$setup_error.="*** No E.coli GO annotation found \nwhile reading data for ecoli_go table. Add using Utility menu\n\n\n";
 	}
 }
 
@@ -3291,8 +3401,8 @@ return $status;
 sub check_executable_on_PATH
 {
 	my $p =shift;
-	my $r = `$p`; chomp($r); 
-	if($r=~m/is not recognised as /g){return 0;}
+	my $r = `$p`; chomp($r);
+	if(!$r){return 0;}
 	else{return 1}
 }
 
@@ -3330,14 +3440,14 @@ sub add_ecoli_go_db
 		$status='download: E.coli proteome'; Tkx::update();
 		my $data   = get($model_org_fasta);
 		if (!$data) {  $status='download: proteome download failed'; die "UP000000625_83333.fasta.gz download failed\n";}
-		open(OUT, '> local_dat/GO/UP000000625_83333_1.fasta') or die "$!";
+		open(OUT, '>./local_dat/GO/UP000000625_83333.fasta') or die "$!";
 		binmode OUT;
 		print OUT $data;
 		close(OUT);
 		sleep 1;
-		my $fasta_file='local_dat/GO/UP000000625_83333_1.fasta';
+		my $fasta_file='./local_dat/GO/UP000000625_83333.fasta';
 		$status='formatdb.exe'; Tkx::update();
-		system ("formatdb.exe -p T -i local_dat\\GO\\UP000000625_83333_1.fasta");
+		system ("formatdb.exe -p T -i .\\local_dat\\GO\\UP000000625_83333.fasta");
 				
 		open (F,"<$fasta_file") or die "$! $fasta_file\n";
 		if($format eq 'uniprot'){
@@ -3432,12 +3542,14 @@ putative bacterial drug-targets.
 
 Use File menu (or Ctrl+n) to create a new 
 project.
-	
+
 Use Downstream-analysis menu to analyse 
 previous run results.
 	
 Use Utilities to add/update metadata used 
 by the tool.
+
+Use the Run buttom below to run the program.
 	
 Presee F1 for help.", -parent=>$mw,-icon=>"info");
 }
