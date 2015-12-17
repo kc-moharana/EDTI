@@ -40,6 +40,7 @@ Following modules are need to be installed
 * Tue, Dec 15, 2015  17:07:33 PM : GO enrich add datababase Utility;
 * Wed, Dec 16, 2015  02:11:53 AM : Executables in ENV PATH; NCBI tax id added; code fix update
 * Wed, Dec 16, 2015  07:11:01 PM : Major code fix; responsive Dialogs-box; broad spectrum cmd toolong fixed;near finish
+* Thr, Dec 17, 2015  07:34:12 PM : v.1.2.1 beta
 
 
 ## Futures supported/proposed
