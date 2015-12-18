@@ -17,7 +17,7 @@ use File::Copy qw(copy);
 use constant PI => 3.1415926536;
 use constant SIGNIFICANT => 5; 		# number of significant digits to be returned
 
-
+our $last_update="18 Dec 2015";
 
 
 system ("cls");
@@ -59,7 +59,7 @@ our $project_name="New_Project";
 our $root_path=	get_my_document_path();		#getcwd();##update later
 our $L_root_path = get_my_document_path('L');	## keeping an extra variable; storing path in Unix format
 our $installation_path=getcwd();			##dont update; essential data files and folders;
-our $last_update="16 Dec 2015";
+
 
 our $front_page_status="File > Create a new project. ";
 our $filter_param_settings_file;						#$root_path."/param.txt";
@@ -2674,14 +2674,9 @@ sub add_to_broad_spectrum_db
 	my $brd_proc_prg=0; my $c=0; my $total_lines;
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
 		if (!$taxonomy_file || !$fasta_dir){ Tkx::tk___messageBox(-message => "ERROR: Input file missing", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_to_broad_spectrum_db(); return 0;}
-		
-	my $brd_proc_prg=0; my $c=0;
 	open (FILE, $taxonomy_file) or die "$! $taxonomy_file";
 	 $total_lines =@{[<FILE>]};
 	close FILE;
-	#$total_lines = `findstr /R /N "^" $taxonomy_file | find /C ":"` ; 
-	#chomp($total_lines);
-	
 		my $BLAST_DB_DIR='PATHOGENS';
 		my $database = './local_dat/PATHOGENS/pathogen_taxonomy.db';
 		
@@ -2710,6 +2705,7 @@ sub add_to_broad_spectrum_db
 					my $password = "";
 					my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
 					my $rv = $dbh->do($sql) or sub {warn "$l[0] : ",$DBI::errstr; next;};	
+					
 		$brd_proc_prg=(++$c/$total_lines)*100;	Tkx::update(); 	
 		}
 		close T;
@@ -2755,6 +2751,7 @@ sub add_a_drug_target_db
 	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	my $drg_tar_prg=0; my $c=0;
+	my ($seq_count,$annots_count,$seq_no_annot,$annots_no_seq_data)=(0,0,0,0);
 	
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
 			if ((!$drug_targ_seq_file || !$annot_file)|| !$prefix){ Tkx::tk___messageBox(-message => "ERROR: Input file missing", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_a_drug_target_db(); return 0;}
@@ -2763,19 +2760,19 @@ sub add_a_drug_target_db
 		my $database = 'drugTarget_db_names.txt';
 		
 		my %annot_seq_id;
-		my $all_seq=read_fasta_sequence($drug_targ_seq_file);
-		my $seq_no_annot=0;
+		my $all_seq=read_fasta_sequence($drug_targ_seq_file); $seq_count = scalar keys %$all_seq;
 		open(S,"<$drug_targ_seq_file") or die "$! $drug_targ_seq_file\n";
 			while(<S>){	if(/^>(\S+)/g){ $annot_seq_id{$1}=1;}}
 		close S;	
 		$drg_tar_prg=10;Tkx::update(); 
 		open(A,"<$annot_file") or die "$! $annot_file\n";
-		my $annots_no_seq_data=0;
+		
 		my @annotations_with_seq_data;
 		while(<A>){	
 			chomp;
 			next if(/^#/ or !$_);
 			my $l=$_;
+			$annots_count++;
 			my @l=split /\t/,$l;
 			if($annot_seq_id{$l[0]}){ $annot_seq_id{$l[0]}=$l; push @annotations_with_seq_data,$l; }
 			else{$annots_no_seq_data++}
@@ -2794,7 +2791,7 @@ sub add_a_drug_target_db
 			else{push @seq_id_with_all_annotations,$t;}
 		}
 		$drg_tar_prg=50;Tkx::update(); 
-		print STDERR "sequences with no annotation: $seq_no_annot\nAnnotations with no sequence data: $annots_no_seq_data\n";
+		#print STDERR "Summary: Sequences with no annotation: $seq_no_annot\nAnnotations with no sequence data: $annots_no_seq_data\n";
 
 		my $r=fetch_seq_by_id($all_seq,\@seq_id_with_all_annotations);
 		write_fasta_seq($r,"./local_dat/$BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
@@ -2809,7 +2806,7 @@ sub add_a_drug_target_db
 		print F "$prefix\n";
 		close F;
 		$drg_tar_prg=90;Tkx::update(); 
-		print STDERR (scalar @seq_id_with_all_annotations -$annots_no_seq_data)." records imported sucessfully\n";
+		
 		system ("formatdb.exe -p T -i $BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
 		
 		$drg_tar_prg=100;Tkx::update(); 
@@ -2821,7 +2818,9 @@ sub add_a_drug_target_db
 		$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"./local_dat/KNOWN_DRUG_TARGETS");
 		$drug_target_annot=read_drugTarget_annot("./local_dat/KNOWN_DRUG_TARGETS");		
 		Tkx::update(); 
-		Tkx::tk___messageBox(-message => "$prefix added successfully", -type=>"ok", -title=>"Success", -icon=>'info'); 
+		my $d=(scalar @seq_id_with_all_annotations -$annots_no_seq_data)." records imported sucessfully\n";
+		Tkx::tk___messageBox(-message => "$prefix added successfully\n\n\nSummary:\n-total input sequence: $seq_count \nSequences with no annotation: $seq_no_annot \nTotal input annotations: $annots_count\nAnnotations with no sequences: $annots_no_seq_data\n--\nImported: $d\n", -type=>"ok", -title=>"Success", -icon=>'info'); 
+		
 	
 	});
 	$run_but->g_grid(-column=>0, -row=>6,-padx=>5,-sticky=>"w");
@@ -2843,6 +2842,147 @@ sub fetch_tax_names
 	return ("$l",\@l);
 	
 }
+
+
+
+##ARGS
+##returns:
+sub add_ecoli_go_db
+{
+
+	my $crt_win =$mw->new_toplevel();
+	$crt_win->g_wm_title("Utility: add GO enrichment database");
+	open_tool_window($crt_win,$mw);
+	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
+	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
+	
+	
+	my ($tax_id,$format,$term_file,$status)= (83333,'uniprot', 'term.txt'.'');
+	my (@ids, %GO);
+	$frm1->new_ttk__label(-text=>"Reference bacterial taxonomic ID")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
+	$frm1->new_ttk__label(-text=>"GO annotation cross-reference database")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
+	$frm1->new_ttk__label(-text=>"Gene Consortitium term file")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
+	
+	$frm1 ->new_ttk__entry(-textvariable => \$tax_id,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
+	$frm1 ->new_ttk__entry(-textvariable => \$format,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
+	$frm1 ->new_ttk__entry(-textvariable => \$term_file,-width=>30,)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2,-sticky=>"wn");
+	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
+	$term_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
+	
+	})->g_grid(-column=>3,-row=>2,-padx=>2,-pady=>1,-sticky=>"e");
+	my $prg_level=0;
+	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
+			if (!$term_file|| !-e $term_file ){ Tkx::tk___messageBox(-message => "ERROR: Input file missing.Plese refer to manual.", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_ecoli_go_db(); return 0;}
+			die "No $term_file" if (!$term_file || !-e $term_file);
+		my $model_org_fasta= 'ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Bacteria/UP000000625_83333.fasta.gz';
+		$status='downloading E.coli proteome'; Tkx::update();
+		my $data   = get($model_org_fasta);
+		if (!$data) {  $status='download: proteome download failed'; die "UP000000625_83333.fasta.gz download failed\nCheck internet connection";}
+		open(OUT, '>./local_dat/GO/UP000000625_83333.fasta') or die "$!";
+		binmode OUT;
+		print OUT $data;
+		close(OUT);
+		sleep 1;
+		my $fasta_file='./local_dat/GO/UP000000625_83333.fasta';
+		$status='BLAST setup'; Tkx::update();
+		system ("formatdb.exe -p T -i .\\local_dat\\GO\\UP000000625_83333.fasta");
+				
+		open (F,"<$fasta_file") or die "$! $fasta_file\n";
+		$status="Reading E.coli proteome";Tkx::update();
+		if($format eq 'uniprot'){
+		#>sp|A5A605|YKFM_ECOLI Uncharacterized protein YkfM OS=Escherichia coli (strain K12) GN=ykfM PE=4 SV=1
+			while(<F>)
+			{
+				chomp;
+				if(/^>\w+\|(\S+)\|\w+\s+/){push @ids,$1; }
+			}
+		}
+		close F;
+		#print STDERR "$fasta_file Fasta done\nTax id: $tax_id\n";
+		#print STDERR "Fetching GO ids from Uniprot\n";
+		#print STDERR "\n";
+		Tkx::update();
+		my $driver   = "SQLite";
+		my $dsn = "DBI:$driver:dbname=local_dat/GO/GO.db";
+		my $userid = "";
+		my $password = "";
+		my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
+		my $stmt = qq(DELETE FROM ecoli_go;);	#
+		my $rv = $dbh->do($stmt) or die $DBI::errstr;
+		$status="Importing records";Tkx::update();
+		foreach my $i (0..$#ids)
+		{		
+			my $g = fetch_go_uniprot($ids[$i],$tax_id);		
+			if($g=='ERROR') {warn "No GO id fround for $ids[$i]. Skip.. \n"; $status="$ids[$i] error";}
+			else{		
+				my @go = @{$g}; shift @go;
+				foreach my $r(@go)
+				{
+					my $stmt = qq(INSERT INTO ecoli_go (go_id,ecoli_ac) VALUES ('$r','$ids[$i]'););	#
+					my $rv = $dbh->do($stmt) or die $DBI::errstr;
+					$i++;	
+					$prg_level=($i/scalar@ids)*100;	Tkx::update();
+					$status=sprintf "Importing record %s/%s",$i,scalar@ids;Tkx::update();
+				}		
+			}		
+		}
+		my $stmt = qq(DELETE FROM go_term;);	#Fartry reset
+		my $rv = $dbh->do($stmt) or die $DBI::errstr;
+		$status='Adding data to go_term';Tkx::update();
+		open (I, "<$term_file") or die "$! $term_file";
+		while(<I>){
+		chomp;
+		my @l=split /\t/,$_;
+		if($l[3]=~m/^GO\:\d{7}/g){
+			my $stmt = qq(INSERT INTO go_term (GO_id,ontology_category,term) VALUES (\"$l[3]\",\"$l[2]\",\"$l[1]\"););	
+			my $rv = $dbh->do($stmt) or die $DBI::errstr;
+		}
+		else{warn "No GO id found\n Skipping @l\n"}
+		}
+		close I;
+		Tkx::tk___messageBox(-message => "GO meta-data imported succesfully", -type=>"ok", -title=>"Success", -icon=>'info');
+	});		
+	
+	$run_but->g_grid(-column=>0,-row=>8,-padx=>2,-pady=>1,-sticky=>"wn");
+	$frm1->new_ttk__label(-text=>"Progress")->g_grid(-column=>2,-row=>8,-padx=>2,-pady=>5,-sticky=>"ne");
+	my $go_data_add=$frm1->new_ttk__progressbar(-orient => 'horizontal', -length => 100, -mode => 'determinate', -variable=>\$prg_level);
+	$go_data_add -> g_grid(-column=>3,-row=>8,-padx=>3,-pady=>5,-sticky=>"w",-columnspan=>2);
+	$frm1->new_ttk__label(-textvariable=>\$status)->g_grid(-column=>0,-row=>9,-padx=>2,-pady=>5,-sticky=>"w",-columnspan=>2);
+	$status=(check_internet()?"Active internet": 'No internet'); Tkx::update();
+}
+
+#fetch_go_uniprot('P10408','83333');
+sub fetch_go_uniprot
+{
+my $uniprot_id=shift;
+my $org_id =shift;
+	my $url ='http://www.uniprot.org/uniprot/?query=accession:'.$uniprot_id.'+AND+organism:'.$org_id.'&format=tab&columns=id,go-id';
+	my $content = get $url;
+#	die "Couldn't get $url" unless defined $content;
+	if(!$content || $content =~m/^400/g) {
+		print STDERR "Bad request. There is a problem with your input.\n";
+		return 'ERROR';
+	  } 
+	  else {
+		#print "$content\n";
+		my ($t,$go)=split /\n/,$content;
+		my @g = split /;\s*/,$go;
+		return \@g;
+	}	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3406,128 +3546,6 @@ sub check_executable_on_PATH
 	else{return 1}
 }
 
-
-
-##ARGS
-##returns:
-sub add_ecoli_go_db
-{
-
-	my $crt_win =$mw->new_toplevel();
-	$crt_win->g_wm_title("Utility: add GO enrichment database");
-	open_tool_window($crt_win,$mw);
-	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
-	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");
-	
-	
-	my ($tax_id,$format,$term_file,$status)= (83333,'uniprot', 'term.txt'.'');
-	my (@ids, %GO);
-	$frm1->new_ttk__label(-text=>"Reference bacterial taxonomic ID")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"GO annotation cross-reference database")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"Gene Consortitium term file")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
-	
-	$frm1 ->new_ttk__entry(-textvariable => \$tax_id,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$format,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$term_file,-width=>30,)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2,-sticky=>"wn");
-	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$term_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
-	})->g_grid(-column=>4,-row=>2,-padx=>2,-pady=>1,-sticky=>"wn");
-	
-	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-			if (!$term_file ){ Tkx::tk___messageBox(-message => "ERROR: Input file missing.Plese refer to manual.", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_ecoli_go_db(); return 0;}
-		my $model_org_fasta= 'ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Bacteria/UP000000625_83333.fasta.gz';
-		$status='download: E.coli proteome'; Tkx::update();
-		my $data   = get($model_org_fasta);
-		if (!$data) {  $status='download: proteome download failed'; die "UP000000625_83333.fasta.gz download failed\n";}
-		open(OUT, '>./local_dat/GO/UP000000625_83333.fasta') or die "$!";
-		binmode OUT;
-		print OUT $data;
-		close(OUT);
-		sleep 1;
-		my $fasta_file='./local_dat/GO/UP000000625_83333.fasta';
-		$status='formatdb.exe'; Tkx::update();
-		system ("formatdb.exe -p T -i .\\local_dat\\GO\\UP000000625_83333.fasta");
-				
-		open (F,"<$fasta_file") or die "$! $fasta_file\n";
-		if($format eq 'uniprot'){
-		#>sp|A5A605|YKFM_ECOLI Uncharacterized protein YkfM OS=Escherichia coli (strain K12) GN=ykfM PE=4 SV=1
-			while(<F>)
-			{
-				chomp;
-				if(/^>\w+\|(\S+)\|\w+\s+/){push @ids,$1; }
-			}
-		}
-		close F;
-		print STDERR "$fasta_file Fasta done\nTax id: $tax_id\n";
-		print STDERR "Fetching GO ids from Uniprot\n";
-		print STDERR "\n";
-		$status=sprintf "0/%d",scalar@ids;Tkx::update();
-		my $driver   = "SQLite";
-		my $dsn = "DBI:$driver:dbname=local_dat/GO/GO.db";
-		my $userid = "";
-		my $password = "";
-		my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) or die $DBI::errstr;
-		my $stmt = qq(DELETE FROM ecoli_go;);	#
-		my $rv = $dbh->do($stmt) or die $DBI::errstr;
-		$status=sprintf "0/%d",scalar@ids;Tkx::update();
-		foreach my $i (0..$#ids)
-		{		
-			my $g = fetch_go_uniprot($ids[$i],$tax_id);		
-			if($g=='ERROR') {warn "No GO id fround for $ids[$i]. Skip.. \n";}
-			else{		
-				my @go = @{$g}; shift @go;
-				foreach my $r(@go)
-				{
-					my $stmt = qq(INSERT INTO ecoli_go (go_id,ecoli_ac) VALUES ('$r','$ids[$i]'););	#
-					my $rv = $dbh->do($stmt) or die $DBI::errstr;
-					$i++;	
-					$status=sprintf "%d/%d",$i,scalar@ids;Tkx::update();
-				}		
-			}		
-		}
-		
-		die "No $term_file" if (!$term_file || !-e $term_file);
-		my $stmt = qq(DELETE FROM go_term;);	#
-		my $rv = $dbh->do($stmt) or die $DBI::errstr;
-		$status='Adding data to go_term';Tkx::update();
-		open (I, "<$term_file") or die "$! $term_file";
-		while(<I>){
-		chomp;
-		my @l=split /\t/,$_;
-		if($l[3]=~m/^GO\:\d{7}/g){
-			my $stmt = qq(INSERT INTO go_term (GO_id,ontology_category,term) VALUES (\"$l[3]\",\"$l[2]\",\"$l[1]\"););	
-			my $rv = $dbh->do($stmt) or die $DBI::errstr;
-		}
-		else{warn "No GO id found\n Skipping @l\n"}
-		}
-		close I;	
-	});		
-	
-	$run_but->g_grid(-column=>0,-row=>8,-padx=>2,-pady=>1,-sticky=>"wn");
-	$frm1->new_ttk__label(-textvariable=>\$status)->g_grid(-column=>0,-row=>9,-padx=>2,-pady=>5,-sticky=>"nw");
-	$status=(check_internet()?"Active internet": 'No internet'); Tkx::update();
-}
-
-#fetch_go_uniprot('P10408','83333');
-sub fetch_go_uniprot
-{
-my $uniprot_id=shift;
-my $org_id =shift;
-	my $url ='http://www.uniprot.org/uniprot/?query=accession:'.$uniprot_id.'+AND+organism:'.$org_id.'&format=tab&columns=id,go-id';
-	my $content = get $url;
-#	die "Couldn't get $url" unless defined $content;
-	if(!$content || $content =~m/^400/g) {
-		print STDERR "Bad request. There is a problem with your input.\n";
-		return 'ERROR';
-	  } 
-	  else {
-		#print "$content\n";
-		my ($t,$go)=split /\n/,$content;
-		my @g = split /;\s*/,$go;
-		return \@g;
-	}	
-}
 
 
 
