@@ -41,6 +41,8 @@ Following modules are need to be installed
 * Wed, Dec 16, 2015  02:11:53 AM : Executables in ENV PATH; NCBI tax id added; code fix update
 * Wed, Dec 16, 2015  07:11:01 PM : Major code fix; responsive Dialogs-box; broad spectrum cmd toolong fixed;near finish
 * Thr, Dec 17, 2015  07:34:12 PM : v.1.2.1 beta
+* Fri, Dec 18, 2015  04:52:12 PM : stable v.1.2.1b (beta); BLAST path contingin space not accepted;
+
 
 
 ## Futures supported/proposed
