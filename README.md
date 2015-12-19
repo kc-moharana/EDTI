@@ -23,9 +23,23 @@ Following modules are need to be installed
 
 ## External softwares required
 * NCBI Blast (v. 2.2.18): blastall.exe
-* CD-Hit (): cd-hit.exe 
+* CD-Hit (v.4.6 tested on MinGw-w64): cd-hit.exe  [Seebelow for detailed stpes describing how to Compile on Windows]
 * Sqlite (v. 3) : sqlite3.exe
 * formatdb (v. 2.2.18): formatdb.exe 
+
+###Complie cd-hit source into Win32 executable.
+1. Download the cdhit-master.zip file from https://github.com/weizhongli/cdhit
+2. Extract the zip file and Open the folder cdhit-master.
+3. open 'Makefile' file in notepad  and in the third line add '-static'  ( CC = g++ -static  ). Save the file
+Compile using Mingw-w64
+-----------------------
+1. Download and install mingw-w64 from SOurceforge.com.
+2. Go to  C:\Program Files\mingw-w64\x86_64-5.2.0-win32-seh-rt_v4-rev1 directory (depends on your OS path). and Double click on mingw-w64.bat file.
+3. On COmmandline go to the cdhit-master directory. 
+	3.1 on Modern OS (supporting threading)like Windows-7,8,8.1 or 10: Run command 'mingw32-make '.  
+	3.2 On older OS like Win-XP : : Run command 'mingw32-make openmp=no '.
+	3.3 This should run fine and output cd-hit.exe. 
+4. Now copy the cd-hit.exe to executable folder. 
 
 ## Changes and bug fixes
 * PPI data integration
