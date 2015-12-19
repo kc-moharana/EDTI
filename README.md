@@ -15,11 +15,9 @@ Active perl is used to develop the tool.
 Currently supports only Windows XP/7/8.
 
 ## Dependacies
-Following modules are need to be installed
-* Tkx
-* GD
-* DBI
-* Graph
+Most of the modules come bundled with Activeperl distribution. 
+How ever, following modules are need to be installed additionally.
+* Graph (TO install open command prompt and type : cpan install Graph)
 
 ## External softwares required
 * NCBI Blast (v. 2.2.18): blastall.exe
@@ -30,7 +28,7 @@ Following modules are need to be installed
 ###Complie cd-hit source into Win32 executable.
 1. Download the cdhit-master.zip file from https://github.com/weizhongli/cdhit
 2. Extract the zip file and Open the folder cdhit-master.
-3. open 'Makefile' file in notepad  and in the third line add '-static'  ( CC = g++ -static  ). Save the file
+3. open 'Makefile' file in notepad  and in the third line add '-static'  ( CC = g++ -static  ). Save the file.
 
 > Compile using Mingw-w64
 
