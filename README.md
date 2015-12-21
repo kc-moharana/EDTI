@@ -20,17 +20,19 @@ How ever, following modules are need to be installed additionally.
 * Graph (TO install open command prompt and type : cpan install Graph)
 
 ## External softwares required
-* NCBI Blast (v. 2.2.18): blastall.exe
-* CD-Hit (v.4.6 tested on MinGw-w64): cd-hit.exe  [Seebelow for detailed stpes describing how to Compile on Windows]
-* Sqlite (v. 3) : sqlite3.exe
-* formatdb (v. 2.2.18): formatdb.exe 
+* NCBI Blast (v. 2.2.18): blastall.exe <a href='ftp://ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'>Download</a>
+* CD-Hit (v.4.6 tested on MinGw-w64): cd-hit.exe  [See below for detailed stpes describing how to Compile on Windows]
+<a href='https://github.com/weizhongli/cdhit' target='_blank'>cd-hit github</a>
+
+* Sqlite (v. 3) : sqlite3.exe <a href='https://www.sqlite.org/download.html' target='_blank'>Download</a>
+* formatdb (v. 2.2.18): formatdb.exe  [install BLAST+]
 
 ###Complie cd-hit source into Win32 executable.
 1. Download the cdhit-master.zip file from https://github.com/weizhongli/cdhit
 2. Extract the zip file and Open the folder cdhit-master.
 3. open 'Makefile' file in notepad  and in the third line add '-static'  ( CC = g++ -static  ). Save the file.
 
-> Compile using Mingw-w64
+> Compile cd-hit source using Mingw-w64
 
 1. Download and install mingw-w64 from http://sourceforge.net/projects/mingw-w64/files/latest/download
 2. Go to  C:\Program Files\mingw-w64\x86_64-5.2.0-win32-seh-rt_v4-rev1 directory (depends on your OS path). and Double click on mingw-w64.bat file.
