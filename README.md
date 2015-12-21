@@ -57,6 +57,7 @@ How ever, following modules are need to be installed additionally.
 * Wed, Dec 16, 2015  07:11:01 PM : Major code fix; responsive Dialogs-box; broad spectrum cmd toolong fixed;near finish
 * Thr, Dec 17, 2015  07:34:12 PM : v.1.2.1 beta
 * Fri, Dec 18, 2015  04:52:12 PM : stable v.1.2.1b (beta); BLAST path contingin space not accepted;
+* Mon, Dec 21, 2015  11:54:12 AM : stable v.1.2.2b (beta); BLAST+ Supported;
 
 
 
@@ -85,7 +86,7 @@ How ever, following modules are need to be installed additionally.
  - [ ] PDF Doc
  - [ ] HTML version
 - [ ] OS dependancy
- - [ ] Windows Version
+ - [x] Windows Version
  - [ ] Unix Version
 - [ ] External binary executables on PATH
  
