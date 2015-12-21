@@ -8,8 +8,8 @@ Tkx::package_require("BWidget");
 #Tkx::namespace_import("::tooltip::tooltip");
 use Cwd;
 use DBI;
-use Graph;
-use Graph::Undirected;
+#use Graph;
+#use Graph::Undirected;
 use LWP::Simple;
 use LWP::UserAgent;
 use HTTP::Request::Common;
@@ -171,6 +171,7 @@ print STDERR "Reading drug Target data:";
 our $drug_db_names=read_drugTarget_db("./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	##read files to update it;
 our $ref_drug_db_array=[];
 open(G,"./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt") or die"$! ./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
+$setup_error.="*** Add Drug-target database and annotations using Utility menu. Refer manual for details\n\n\n" if(scalar @$ref_drug_db_array <1);
 our $drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"./local_dat/KNOWN_DRUG_TARGETS");
 our $drug_target_annot=read_drugTarget_annot("./local_dat/KNOWN_DRUG_TARGETS");
 print STDERR "DONE";
@@ -192,8 +193,8 @@ our $top_hub_perc=20;
 our ($e_val_1,$out_fmt_1,$sub_matrix_1,$gap_score_1, $extra_params_BLAST1,$word_size_1,$threshold_1,$perc_identity_1,$blast_prg1)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,20,0);	
 our ($e_val_2,$out_fmt_2,$sub_matrix_2,$gap_score_2, $extra_params_BLAST2,$word_size_2,$threshold_2,$perc_identity_2,$blast_prg2)=(0.0000000001,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
 our ($e_val_3,$out_fmt_3,$sub_matrix_3,$gap_score_3, $extra_params_BLAST3,$word_size_3,$threshold_3,$perc_identity_3,$blast_prg3)=(0.01,8,"BLOSUM62","11,1","",3,11,30,0);
-our ($e_val_4,$out_fmt_4,$sub_matrix_4,$gap_score_4, $extra_params_BLAST4,$word_size_4,$threshold_4,$perc_identity_4,$blast_prg4)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
-our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5,$blast_prg5)=(0.01,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
+our ($e_val_4,$out_fmt_4,$sub_matrix_4,$gap_score_4, $extra_params_BLAST4,$word_size_4,$threshold_4,$perc_identity_4,$blast_prg4)=(0.1,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
+our ($e_val_5,$out_fmt_5,$sub_matrix_5,$gap_score_5, $extra_params_BLAST5,$word_size_5,$threshold_5,$perc_identity_5,$blast_prg5)=(5,8,"BLOSUM62","11,1","-b 1",3,11,0,0);
 
 if ($blast_version eq 'blast+'){
 	($out_fmt_1,$out_fmt_2,$out_fmt_3,$out_fmt_4,$out_fmt_5)=(6,6,6,6,6);
@@ -483,7 +484,7 @@ Tkx::update();
 welcome_message() if $wlc_msg_show;
 
 if($setup_error){
-Tkx::tk___messageBox(-title=>"Metadata not found",-message => $setup_error);
+Tkx::tk___messageBox(-title=>"Setting error: Metadata not found",-message => "Following settings are missing:\n\n\n".$setup_error, -type=>'ok', -icon=>'warning');
 }
 
 
@@ -1261,6 +1262,8 @@ sub broad_spect_run
 	unlink "$L_root_path/broad_spe_blast3.out.txt" if (-e "$L_root_path/broad_spe_blast3.out.txt");
 	my($gap_open, $gap_extns)=split /,/,$gap_score_3;
 	my @broad_spectrum_pathogen_db_list = split /,/,$broad_spectrum_pathogen_db_list;
+	if(scalar@broad_spectrum_pathogen_db_list <1){ Tkx::tk___messageBox(-message => "ERROR: no database selected. This coould be due to none of the pathogenes selected to be compared or no pathogen protome has been added.\n Go to  Setting->Downstream analysis, for selecting pathogenes.\nUse Utility menu to add pathogen proteomes ", -type=>"ok", -title=>"Alert", -icon=>"warning" ); return();}
+	
 	`echo echo off > batch.bat`;
 	`echo color 90 >> batch.bat`;
 	`echo 0 > brd_run.txt`;
@@ -1339,7 +1342,7 @@ sub broad_spect_run
 		
 		$sequence_summary{-broad_spectrum}=scalar @query_id;	##update later on applying filter
 		
-		if(!(scalar @query_id)){ Tkx::tk___messageBox(-message => "None of the queries are conserved in any of the species", -type=>"ok", -title=>"Alert", -con=>"warning" ); return();}
+		if(!(scalar @query_id)){ Tkx::tk___messageBox(-message => "None of the queries are conserved in any of the species", -type=>"ok", -title=>"Alert", -icon=>"warning" ); return();}
 		
 		my $tot_cons_count=0; my @cons_counts_perc; my $max_cons=-1;
 		foreach(@cons_counts){ my $x=$_;$max_cons=($x>$max_cons?$x:$max_cons); $tot_cons_count+=$x;}
@@ -1405,7 +1408,7 @@ sub broad_spect_run
 		
 		});
 		
-	Tkx::tk___messageBox(-message => "Run complete.\nChoose minimum number of conserved species and Click on Apply button.",-type=>"ok", -title=>"Alert"); 
+	Tkx::tk___messageBox(-message => "Run complete.\nChoose minimum number of conserved species and Click on Apply button.",-type=>"ok", -title=>"Success"); 
 	}); ##END RUN button
 	
 }	## END BROAD spect
@@ -1471,6 +1474,8 @@ sub comp_known_DT
 	
 	
 	$$run_button->configure(-state=>"normal", -command =>sub {
+	
+		if(scalar @$ref_drug_db_array<1){Tkx::tk___messageBox(-message => "ERROR: No Drug target database found. YOu may add a new drug target database using Utility menu",-type=>"ok", -title=>"Alert",-icon=>"warning"); return();}
 			$$run_button->configure(-state=>"disabled");
 			unlink "$L_root_path/drug_target_blast4.out.txt";
 			my($gap_open, $gap_extns)=split /,/,$gap_score_1;
@@ -1678,6 +1683,7 @@ sub GO_analysis{
 	#$save_go_enrich_table->g_grid(-column=>6, -row=>9,-padx=>2,-pady=>5,-sticky=>"w");
 	
 	$$run_button->configure(-state=>"normal", -command =>sub {
+			if (!chk_GO_db()){Tkx::tk___messageBox(-message => "Warning:E.coli GO annotation not found. Add GO enrichmentdata using Utility menu\n", -type=>"ok", -title=>"Alert", -icon=>'warning'); return 0; }
 			my ($match,$mat_ids)=compare_two_fasta_file(unix_path($input_seq),unix_path($background_seq));
 			#print "Percentage of match in input file iwth bck $match\n";
 			
@@ -1724,8 +1730,10 @@ sub GO_analysis{
 				else{system("start batch.bat ");}
 				
 				while(!(-e "$L_root_path/E_coli_ortho_blast5.out.txt")){
-				$blast_prg5=blast_progress("$root_path\\E_coli_ortho_blast5.out","$L_root_path/E_coli_ortho_blast5.out",$sequence_summary{-total_seq} ); sleep(3); Tkx::update(); 
+					$blast_prg5=blast_progress("$root_path\\E_coli_ortho_blast5.out","$L_root_path/E_coli_ortho_blast5.out",$sequence_summary{-total_seq} ); sleep(3); Tkx::update(); 
 				}	##wait till blast4.out.txt is available
+				
+				
 				$blast_prg5=100;  Tkx::update();
 				my $model_org_ortho = process_GO_BLAST_out("$L_root_path/E_coli_ortho_blast5.out.txt"); ## [-seq_id => Ecoli_id_uniprt_ac]; all genes; bckgrnd
 				$GO_ana_progress=10;
@@ -2729,8 +2737,7 @@ sub util_PPI
 		}
 		
 		if ($blast_version eq 'old_blastall'){
-		my $blastcmd="blastall.exe -p blastp -d $PPI_seq -i $pathogen_seq -m 8 -W 7 -b 1 -a $use_cores -o $output_dir\\PPI_blast.out";
-			
+		my $blastcmd="blastall.exe -p blastp -d $PPI_seq -i $pathogen_seq -m 8 -W 7 -b 1 -a $use_cores -o $output_dir\\PPI_blast.out";		
 				`echo echo off > batch.bat`;
 				`echo color 90 >> batch.bat`;
 				`echo cls >> batch.bat`;
@@ -2751,7 +2758,7 @@ sub util_PPI
 				
 				`echo echo Please wait.......... >> batch.bat`;
 				`echo $blastcmd >> batch.bat`;
-				
+				`echo rename  $output_dir\\PPI_blast.out PPI_blast.out.txt >> batch.bat`;				
 				`echo exit >> batch.bat`;				
 				if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
 				else{system("start batch.bat ");}
@@ -2779,15 +2786,16 @@ sub util_PPI
 				
 				`echo echo Please wait.......... >> batch.bat`;
 				`echo $blastcmd >> batch.bat`;
-				
+				`echo rename  $output_dir\\PPI_blast.out PPI_blast.out.txt >> batch.bat`;				
 				`echo exit >> batch.bat`;				
 				if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
-				else{system("start batch.bat ");}
-		
+				else{system("start batch.bat ");}		
 		}		
 		$PPI_blast_prg=50;	Tkx::update(); 
 		
-		my $mapped_hash = process_GO_BLAST_out(unix_path($output_dir."\\PPI_blast.out"),98);
+		while(!(-e unix_path($output_dir."\\PPI_blast.out.txt"))){sleep(2);}
+		
+		my $mapped_hash = process_GO_BLAST_out(unix_path($output_dir."\\PPI_blast.out.txt"),98);
 		$PPI_blast_prg=55;	Tkx::update(); 
 		
 		open (O,">",unix_path($output_dir)."/PPI_ID_mapped.txt") or die "$! ".unix_path($output_dir)."/PPI_ID_mapped.txt";
@@ -3205,10 +3213,12 @@ sub chk_GO_db
 	my $stmt = qq(SELECT  COUNT(*) FROM ecoli_go;);	#
 	my $sth = $dbh->prepare($stmt);
 	$sth->execute(); my $r = $sth->fetch()->[0];
-	if($r<1){
+	if($r <1){
 	print STDERR "ERROR: No E.coli GO annotation found while reading data for ecoli_go table \n. Add Few using Utility menu\n";
 	$setup_error.="*** No E.coli GO annotation found \nwhile reading data for ecoli_go table. Add using Utility menu\n\n\n";
+	return 0;
 	}
+	else{return 1}
 }
 
 ##ARgs: go_id
