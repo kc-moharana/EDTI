@@ -7,20 +7,23 @@ The availability of complete genome sequences of pathogenic bacteria and their p
 
 These proteins could thus act as potential targets for drugs acting against the particular pathogen.
 
+<img src='algo.png' />
+
+
 ##Citation
 
 ## PERL implementation
-Active perl is used to develop the tool. 
+Active Perl is used to develop the tool. 
 ## System requirements
 Currently supports only Windows XP/7/8.
 
 ## Dependacies
-Most of the modules come bundled with Activeperl distribution. 
-How ever, following modules are need to be installed additionally.
-* Graph (TO install open command prompt and type : cpan install Graph)
+The tool need Perl (www.perl.org) to be installed on your local computer. We reccommnend to install Activeperl (v. MSWin32-x86-64int) as most of the modules used by EDTI come bundled with ActivePerl distribution. 
+However, following modules are need to be installed additionally from cpan.
+* Graph (To install open command prompt and type : <i>cpan install Graph</i>)
 
 ## External softwares required
-* NCBI Blast (v. 2.2.18): blastall.exe <a href='ftp://ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'>Download</a>
+* NCBI Blast (v. 2.2.18): blastall.exe <a href='ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'> Download </a>
 * CD-Hit (v.4.6 tested on MinGw-w64): cd-hit.exe  [See below for detailed stpes describing how to Compile on Windows]
 <a href='https://github.com/weizhongli/cdhit' target='_blank'>cd-hit github</a>
 
@@ -76,7 +79,7 @@ How ever, following modules are need to be installed additionally.
  - [x] Gene Ontology Enrichment
  - [ ] Pathway enrichment
  - [x] Sub-cellular localization prediction
-- [ ] Utility to create inputs
+- [x] Utility to create inputs
  - [x] create PPI networks from STRING dataset
  - [x] Create Drug traget database
  - [x] create Broadspectrum analysis database
