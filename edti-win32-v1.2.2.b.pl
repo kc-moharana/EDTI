@@ -3386,13 +3386,15 @@ Presee F1 for help.", -parent=>$mw,-icon=>"info");
 #  Meta functions
 ################################################################################################
 
-##ARgs: blast tab out file
+
+##ARgs: blast tab out file, percenta)identy, format
 ##Returns: ref of hash; [ ]
 #sp|A8FJG5|DNAA_CAMJ8	sp|P03004|DNAA_ECOLI	37.65	332	203	2	101	430	132	461	3e-063	 235
 sub process_GO_BLAST_out
 {
 	my $file= shift;
 	my $identity = shift || 30;
+	my $format =shift || 'uniprot';
 	my %h;
 	
 	open (O, "< $file") or die "$! ";
@@ -3402,13 +3404,16 @@ sub process_GO_BLAST_out
 		my @l = split /\s+/,$_;
 		if ($l[2]>=$identity)
 		{
-			my ($a,$ac,$t)= split /\|/,$l[1];
+			my ($a,$ac,$t);
+			($a,$ac,$t)= split /\|/,$l[1] if $format eq 'uniprot';
+			$ac= $l[1] if $format ne 'uniprot';
 			$h{$l[0]}=$ac; 
 		}		
 	}
 	close O;
 	return \%h;	
 }
+
 
 ##args: nothing
 ##returns: an ref of hash; ACIAD	Acinetobacter sp. (strain ADP1) 
