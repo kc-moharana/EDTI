@@ -8,8 +8,8 @@ Tkx::package_require("BWidget");
 #Tkx::namespace_import("::tooltip::tooltip");
 use Cwd;
 use DBI;
-use Graph;
-use Graph::Undirected;
+#use Graph;
+#use Graph::Undirected;
 use LWP::Simple;
 use LWP::UserAgent;
 use HTTP::Request::Common;
@@ -3085,7 +3085,9 @@ sub add_ecoli_go_db
 	})->g_grid(-column=>3,-row=>2,-padx=>2,-pady=>1,-sticky=>"e");
 	my $prg_level=0;
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-			if (!$term_file|| !-e $term_file ){ Tkx::tk___messageBox(-message => "ERROR: Input file missing.Plese refer to manual.", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_ecoli_go_db(); return 0;}
+			$run_but->configure(-state=>'disabled');
+			if (!$term_file|| !-e $term_file ){ Tkx::tk___messageBox(-message => "ERROR: Input files missing.Plese refer to manual.", -type=>"ok", -title=>"Alert", -icon=>'warning',-parent=>$crt_win); return 0;}
+			if(!check_internet()){Tkx::tk___messageBox(-message => "Active internet required!!. Check internet connection", -type=>"ok", -title=>"Alert", -icon=>'warning',-parent=>$crt_win); return 0;}
 			die "No $term_file" if (!$term_file || !-e $term_file);
 		my $model_org_fasta= 'ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Bacteria/UP000000625_83333.fasta.gz';
 		$status='downloading E.coli proteome'; Tkx::update();
@@ -3134,8 +3136,8 @@ sub add_ecoli_go_db
 					my $stmt = qq(INSERT INTO ecoli_go (go_id,ecoli_ac) VALUES ('$r','$ids[$i]'););	#
 					my $rv = $dbh->do($stmt) or die $DBI::errstr;
 					$i++;	
-					$prg_level=($i/scalar@ids)*100;	Tkx::update();
-					$status=sprintf "Importing record %s/%s",$i,scalar@ids;Tkx::update();
+					$prg_level=((($i/scalar@ids)*100)>80?80:(($i/scalar@ids)*100));	Tkx::update();
+					$status=sprintf "Importing E.coli record %s/%s",$i,scalar@ids;Tkx::update();
 				}		
 			}		
 		}
@@ -3143,17 +3145,22 @@ sub add_ecoli_go_db
 		my $rv = $dbh->do($stmt) or die $DBI::errstr;
 		$status='Adding data to go_term';Tkx::update();
 		open (I, "<$term_file") or die "$! $term_file";
+		my $i=0;
 		while(<I>){
 		chomp;
 		my @l=split /\t/,$_;
 		if($l[3]=~m/^GO\:\d{7}/g){
 			my $stmt = qq(INSERT INTO go_term (GO_id,ontology_category,term) VALUES (\"$l[3]\",\"$l[2]\",\"$l[1]\"););	
 			my $rv = $dbh->do($stmt) or die $DBI::errstr;
+			$i++;
 		}
 		else{warn "No GO id found\n Skipping @l\n"}
+		$prg_level=80+(($i/50000)*20);				## assuming approx 50000 recors, extatly 44000 present
+		$status=sprintf "Importing GO terms record %s",$i;Tkx::update();
 		}
 		close I;
 		$status='DONE';Tkx::update();
+		$prg_level=100;
 		#close_tool_window($crt_win,$mw);
 		$crt_win->g_destroy();
 		$mw->g_wm_attributes (-disabled  =>0);
