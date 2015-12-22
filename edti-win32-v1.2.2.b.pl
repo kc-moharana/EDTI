@@ -2669,7 +2669,7 @@ sub util_PPI
 		system("formatdb.exe -p T -i ".$PPI_seq) if ($blast_version eq 'old_blastall');
 		system("makeblastdb.exe -dbtype prot -in ".$PPI_seq) if ($blast_version eq 'blast+');
 		}
-		
+		unlink unix_path($output_dir."\\PPI_blast.out.txt");
 		if ($blast_version eq 'old_blastall'){
 		my $blastcmd="blastall.exe -p blastp -d $PPI_seq -i $pathogen_seq -m 8 -W 7 -b 1 -a $use_cores -o $output_dir\\PPI_blast.out";		
 				`echo echo off > batch.bat`;
@@ -2742,7 +2742,7 @@ sub util_PPI
 		while(<P>){ chomp; my ($A,$B,$score)=split /\s+/,$_; if(!$PPI_hash{$A."*".$B} and !$PPI_hash{$B."*".$A}){$PPI_hash{$A."*".$B} = $score}; }
 		close P;
 		$PPI_blast_prg=95;	Tkx::update(); 
-		open (O,">",unix_path($output_dir)."/PPI_ID_mapped.txt") or die "$! ".unix_path($output_dir)."/PPI_ID_mapped.txt";
+		open (O,">",unix_path($output_dir)."/PPI_interaction_with_score.csv") or die "$! ".unix_path($output_dir)."/PPI_interaction_with_score.csv";
 		foreach (keys %PPI_hash) { my ($A,$B)=split /\*/,$_; print O "$A,$B,$PPI_hash{$_}\n";}
 		close O;
 		$PPI_blast_prg=100;	Tkx::update(); 
