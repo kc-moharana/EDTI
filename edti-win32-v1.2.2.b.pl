@@ -81,6 +81,16 @@ our $string_srch_prg=0;
 
 		
 
+print STDERR "Reading System preference:";
+open (S, "<local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
+while(<S>)
+{
+	chomp; 
+	if(/^SYS_CONF_HIDE_CMD_PROMPT=\s+([01]+)/){$cmd_hide=$1;}
+	elsif(/^SYS_CONF_SHOW_WELCOME_MSG=\s+([01]+)/){$wlc_msg_show=$1}
+	elsif(/^SYS_CONF_BLAST_VER=\s+(\S+)/){ $blast_version =$1}
+}
+close S;
 ## MAKING SCRIPT MORE INDEPENDANT
 print STDERR "File setting:\n";
 
@@ -151,16 +161,6 @@ if(!(-e "local_dat/sys_conf")){ print STDERR "\tlocal_dat/sys_conf file not foun
 }
 
 
-print STDERR "Reading System preference:";
-open (S, "<local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
-while(<S>)
-{
-	chomp; 
-	if(/^SYS_CONF_HIDE_CMD_PROMPT=\s+([01]+)/){$cmd_hide=$1;}
-	elsif(/^SYS_CONF_SHOW_WELCOME_MSG=\s+([01]+)/){$wlc_msg_show=$1}
-	elsif(/^SYS_CONF_BLAST_VER=\s+(\S+)/){ $blast_version =$1}
-}
-close S;
 print STDERR "DONE\n";
 
 
