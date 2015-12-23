@@ -12,25 +12,25 @@ These proteins could thus act as potential targets for drugs acting against the 
 
 ##Citation
 
-## PERL implementation
-Active Perl is used to develop the tool. 
-## System requirements
-Currently supports only Windows XP/7/8.
 
-## Dependacies
-The tool need Perl (www.perl.org) to be installed on your local computer. We reccommnend to install Activeperl (v. MSWin32-x86-64int) as most of the modules used by EDTI come bundled with ActivePerl distribution. 
-However, following modules are need to be installed additionally Using Perl Package Manager (internet connection required).
+## System requirements and installation
+Currently supports only Windows XP/7/8.
+The tool needs Perl (www.perl.org) to be installed on your local computer. We reccommnend to install Activeperl (v. MSWin32-x86-64int) as most of the modules used by EDTI come bundled with ActivePerl distribution. 
+However, following modules are need to be installed additionally using Perl Package Manager (internet connection required).
 * Graph (To install open command prompt and type : <i>ppm install Graph</i>)
 
-## External softwares required
-* NCBI Blast (v. 2.2.18): blastall.exe <a href='ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'> Download </a>
+Download and extract the ZIP source code github https://github.com/kanhu-pcr-code/EDTI/
+### External softwares required
+* NCBI Blast+ (v. 2.2.20): blastall.exe <a href='ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'> Download </a>  (older versions of BLAST v2.2.18 can be used.)
 * CD-Hit (v.4.6 tested on MinGw-w64): cd-hit.exe  [See below for detailed stpes describing how to Compile on Windows]
 <a href='https://github.com/weizhongli/cdhit' target='_blank'>cd-hit github</a>
 
 * Sqlite (v. 3) : sqlite3.exe <a href='https://www.sqlite.org/download.html' target='_blank'>Download</a>
-* formatdb (v. 2.2.18): formatdb.exe  [install BLAST+]
+* makeblastdb (v. 2.2.20): formatdb.exe  [install BLAST+]
+* 
 
-###Complie cd-hit source into Win32 executable.
+
+####Complie cd-hit source into Win32 executable.
 1. Download the cdhit-master.zip file from https://github.com/weizhongli/cdhit
 2. Extract the zip file and Open the folder cdhit-master.
 3. open 'Makefile' file in notepad  and in the third line add '-static'  ( CC = g++ -static  ). Save the file.
@@ -83,11 +83,10 @@ This analysis will help to compare and annotate the identified drug-targets with
 - [x] Putative Bactrial Drug targets
  - [x] Single-copy genes (CD-hit) + Non-host proteins(BLAST) + Essntial proteins (BLAST vs DEG)
  - [x] Single-copy genes (CD-hit) + Non-host proteins (BLAST) + Hub genes via Protein-protein interaction analysis (STRING)
-- [ ] Downstream annotation of Targets.
+- [x] Downstream annotation of Targets.
  - [x] Broadspectrum analysis
  - [x] Compare against Known target databases
  - [x] Gene Ontology Enrichment
- - [ ] Pathway enrichment
  - [x] Sub-cellular localization prediction
 - [x] Utility to create inputs
  - [x] create PPI networks from STRING dataset
@@ -101,7 +100,7 @@ This analysis will help to compare and annotate the identified drug-targets with
 - [ ] OS dependancy
  - [x] Windows Version
  - [ ] Unix Version
-- [ ] External binary executables on PATH
+- [x] External binary executables on PATH
  
 
 
