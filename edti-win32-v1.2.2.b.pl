@@ -2919,10 +2919,10 @@ sub add_to_broad_spectrum_db
 		open (T, "< $taxonomy_file") or die "$! $taxonomy_file";
 		while(<T>){
 			chomp;
-			next if /^#/;
+			 if (/^#/ || /^$/){next;$total_lines--; }
 			~s/'//g;
 			my @l=split /\t/,$_;
-			if(!(-e unix_path($fasta_dir."\\$l[1]"))) { warn unix_path($fasta_dir."\\$l[1]"),"$fasta_dir\\$l[1] FASTA file for $l[0] Not found. Skip\n"; next;}
+			if(!(-e unix_path($fasta_dir."\\$l[1]"))) { warn unix_path($fasta_dir."\\$l[1]"),"$fasta_dir\\$l[1] FASTA file for $l[0] Not found. Skip\n";--$total_lines; next;}
 			open (L,unix_path($fasta_dir."\\$l[1]")) or die "$! $fasta_dir\\$l[1]";
 			while(<L>){if(/^>(\S+)/){my ($a,$b,$c)= split /\|/,$1; my ($a,$b) = split /\_/,$c;  if($l[0]=~m/(\S+)\.\w+$/g){ if($1 ne $b){warn "Fasta header does not match file name: $1 ne $b\nTypically Uniprot proteome files expected\nExample: \nFASTA header:tr|Q6FCC9|Q6FCC9_ACIAD\nFile name: ACIAD.fasta. ";}  }  last;} }
 			close L;
@@ -2947,6 +2947,7 @@ sub add_to_broad_spectrum_db
 		}
 		close T;
 		close_tool_window($crt_win,$mw);
+		reset_params();
 		Tkx::tk___messageBox(-message => "$total_lines imported successfully", -type=>"ok", -title=>"Success", -icon=>'info'); 
 	
 	});
@@ -3049,11 +3050,7 @@ sub add_a_drug_target_db
 		$drg_tar_prg=100;Tkx::update(); 
 		close_tool_window($crt_win,$mw);
 		
-		$drug_db_names=read_drugTarget_db("./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt");#' {All} {drugBank} {PTTD} ';	
-		$ref_drug_db_array=[];
-		open(G,"./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt") or die"$!./local_dat/KNOWN_DRUG_TARGETS/drugTarget_db_names.txt"; while(<G>){chomp; push @$ref_drug_db_array,$_;};close G;
-		$drug_blast_db_names=create_drugTarget_blast_db($ref_drug_db_array,"./local_dat/KNOWN_DRUG_TARGETS");
-		$drug_target_annot=read_drugTarget_annot("./local_dat/KNOWN_DRUG_TARGETS");		
+		reset_params();		
 		Tkx::update(); 
 		my $d=(scalar @seq_id_with_all_annotations -$annots_no_seq_data)." records imported sucessfully\n";
 		Tkx::tk___messageBox(-message => "$prefix added successfully\n\n\nSummary:\n-total input sequence: $seq_count \nSequences with no annotation: $seq_no_annot \nTotal input annotations: $annots_count\nAnnotations with no sequences: $annots_no_seq_data\n--\nImported: $d\n", -type=>"ok", -title=>"Success", -icon=>'info'); 
