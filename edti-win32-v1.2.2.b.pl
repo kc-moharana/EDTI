@@ -53,7 +53,7 @@ our $taxon_id;			## NCBI taxon id; trash
 our $setup_error;		## Hold error messages if run for the first time;
 our $cmd_hide=1;	##System prefre, batch query run cmd; update by reading sys_conf_file
 our $wlc_msg_show=1;
-our $blast_version='old_blastall';	##non-funtional
+our $blast_version=(check_executable_on_PATH("blastall --help")?'old_blastall':'blast+'); ##Auto detect
 
 our $project_name="New_Project";	
 our $root_path=	get_my_document_path();		#getcwd();##update later
