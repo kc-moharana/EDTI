@@ -3831,7 +3831,7 @@ sub count_blast_hits
 	my $blast_out=shift;
 	my $total_lines=0;
 	open (O, "$blast_out") or die "$! $$blast_out\n";
-	 $total_lines =@{[<FILE>]};
+	 $total_lines =@{[<O>]};
 	close O;
 	return $total_lines;
 
