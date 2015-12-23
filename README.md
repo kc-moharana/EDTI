@@ -19,8 +19,8 @@ Currently supports only Windows XP/7/8.
 
 ## Dependacies
 The tool need Perl (www.perl.org) to be installed on your local computer. We reccommnend to install Activeperl (v. MSWin32-x86-64int) as most of the modules used by EDTI come bundled with ActivePerl distribution. 
-However, following modules are need to be installed additionally from cpan.
-* Graph (To install open command prompt and type : <i>cpan install Graph</i>)
+However, following modules are need to be installed additionally Using Perl Package Manager (internet connection required).
+* Graph (To install open command prompt and type : <i>ppm install Graph</i>)
 
 ## External softwares required
 * NCBI Blast (v. 2.2.18): blastall.exe <a href='ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'> Download </a>
@@ -44,6 +44,16 @@ However, following modules are need to be installed additionally from cpan.
  2. On older OS like Win-XP : : Run command 'mingw32-make openmp=no '.
  3. This should run fine and output cd-hit.exe. 
 4. Now copy the cd-hit.exe to executable folder. 
+
+##Obtaining Meta-data for downstream analysis
+To use all the features of EDTI few additional one time setup has to be done. Unless you have configured the meta-data correctly, you will see a warning message each time the tool opened. 
+###Broad-spectrum analysis
+This analysis will help to find the number of homologus proteins present across the bacterial lineage. For this analysis the tool requires a wide range of bacterial proteome sequences and  taxonomic order of the corresponding bacteria.Use the <I>Utility</I>-><I>Add pathogenes for broad-spectrum analsysis</I> menu to import this metadata. 
+###Gene Ontology Enrichment analysis
+This analysis will help to annotate the identified targets at system level. To setup this user need to download the ontology terms from GO consortium website (<a href="http://archive.geneontology.org/latest-termdb/go_daily-termdb-tables.tar.gz" target="_blank">MySQL database dump download</a>). The .gz file has to be extracted and 'term.txt' file is required. Use the <I>Utility</I>-><I>Add Ontology database</I> menu to import this metadata. This also requires an active internet connection.
+###Compare with identified targets in avilable drug-target databases
+This analysis will help to compare and annotate the identified drug-targets with available drug-tagets in public databases like Drug-bank. THe metadata can be imported using <I>Utility</I>-><I>Add a drug-target database</I> menu.
+
 
 ## Changes and bug fixes
 * PPI data integration
