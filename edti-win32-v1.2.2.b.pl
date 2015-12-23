@@ -3696,18 +3696,19 @@ sub blast_progress
  my $out2=shift;	## path style must be in unix format; to check existance
  my $total_seq=shift;
  my $temp_file=$out1.'.tmp';
- `copy $out1 $temp_file`;	##just to tacle file lock; may increase program time
+ copy (unix_path($out1), unix_path($temp_file));	##just to tacle file lock; may increase program time
 
  
  if(-e $out2){
-	my $processed_seq=int `findstr /R /N "^" $temp_file | find /C ":"` ; 
+	open (O, unix_path($temp_file)) or die "$! $temp_file\n";
+	my $processed_seq=	@{[<O>]};										#int `findstr /R /N "^" $temp_file | find /C ":"` ; 
+	close O;
 	return ($processed_seq/$total_seq)*100;
-	`del $temp_file`;
+	unlink 	unix_path($temp_file);																#`del $temp_file`;
 	}
 else{return 0}
 	
 }
-
 
 ##args:esential_protein_like_aa_blast_out, bit_score_cutoff;
 ##returns:
