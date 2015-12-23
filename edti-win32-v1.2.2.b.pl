@@ -53,7 +53,7 @@ our $taxon_id;			## NCBI taxon id; trash
 our $setup_error;		## Hold error messages if run for the first time;
 our $cmd_hide=1;	##System prefre, batch query run cmd; update by reading sys_conf_file
 our $wlc_msg_show=1;
-our $blast_version=(check_executable_on_PATH("blastall --help")?'old_blastall':'blast+'); ##Auto detect
+our $blast_version=(check_executable_on_PATH("blastp.exe -help")?'blast+':'old_blastall'); ##Auto detect
 
 our $project_name="New_Project";	
 our $root_path=	get_my_document_path();		#getcwd();##update later
@@ -81,21 +81,19 @@ our $string_srch_prg=0;
 
 		
 
-print STDERR "Reading System preference:";
-open (S, "<local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
-while(<S>)
-{
-	chomp; 
-	if(/^SYS_CONF_HIDE_CMD_PROMPT=\s+([01]+)/){$cmd_hide=$1;}
-	elsif(/^SYS_CONF_SHOW_WELCOME_MSG=\s+([01]+)/){$wlc_msg_show=$1}
-	elsif(/^SYS_CONF_BLAST_VER=\s+(\S+)/){ $blast_version =$1}
-}
-close S;
+
 ## MAKING SCRIPT MORE INDEPENDANT
 print STDERR "File setting:\n";
 
 if(! -d "executables"){ print STDERR "\t".$installation_path."/executables/ : directory Not found. Creating one.\n"; mkdir  "./executables", 0755}
 if(! -d "local_dat/"){ print STDERR "\t".$installation_path."/local_dat/ : directory Not found. Creating one.\n"; mkdir  "./local_dat", 0755}
+if(!(-e "local_dat/sys_conf")){ print STDERR "\tlocal_dat/sys_conf file not found!!!.Creating..\n";
+	open (O, "> local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
+	print O "SYS_CONF_HIDE_CMD_PROMPT= 1\n";
+	print O "SYS_CONF_SHOW_WELCOME_MSG= 1\n";
+	print O "SYS_CONF_BLAST_VER= $blast_version\n";		##Change later static dafault value
+	close O;
+}
 
 ##Making it on path
 my $EXEC_PATH = win_path($installation_path."/executables");
@@ -119,6 +117,16 @@ objShell.Run """" & WScript.Arguments(0) & """", 0, False
 close O;
 
 
+print STDERR "Reading System preference:";
+open (S, "<local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
+while(<S>)
+{
+	chomp; 
+	if(/^SYS_CONF_HIDE_CMD_PROMPT=\s+([01]+)/){$cmd_hide=$1;}
+	elsif(/^SYS_CONF_SHOW_WELCOME_MSG=\s+([01]+)/){$wlc_msg_show=$1}
+	elsif(/^SYS_CONF_BLAST_VER=\s+(\S+)/){ $blast_version =$1}
+}
+close S;
 
 if($blast_version eq 'old_blastall'){
 	if(!check_executable_on_PATH("blastall --help")){ print STDERR "\nERROR: blastall not found on PATH.\nPlease download ncbi blastall (v.2.2.18) and put it in ENVIORNMENT PATH or 'executables' directory.EXIT\n"; exit(1)}
@@ -153,13 +161,6 @@ system ('sqlite3 local_dat/GO/GO.db "CREATE TABLE ecoli_go (GO_id VARCHAR(10) ,	
 $setup_error.="*** Add E.coli GO annotations using Utility menu. Refer manual for details\n\n\n";
 }
 
-if(!(-e "local_dat/sys_conf")){ print STDERR "\tlocal_dat/sys_conf file not found!!!.Creating..\n";
-	open (O, "> local_dat/sys_conf") or die "$! local_dat/sys_conf\n";
-	print O "SYS_CONF_HIDE_CMD_PROMPT= 1\n";
-	print O "SYS_CONF_SHOW_WELCOME_MSG= 1\n";
-	print O "SYS_CONF_BLAST_VER= $blast_version\n";		##Change later static dafault value
-	close O;
-}
 
 
 print STDERR "DONE\n";
