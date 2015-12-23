@@ -17,7 +17,7 @@ use File::Copy qw(copy);
 use constant PI => 3.1415926536;
 use constant SIGNIFICANT => 5; 		# number of significant digits to be returned
 
-our $last_update="21 Dec 2015";
+our $last_update="23 Dec 2015";
 
 
 system ("cls");
@@ -497,6 +497,7 @@ sub main_script
 {
 	my $frm=shift;
 	my $run_button=shift;
+	my $ppi_status="-";
 		
 	##Top panel destroyed; create a new at 0 0 
 	my $frm_top=$$frm->new_ttk__frame(-borderwidth=>0, -width => 600, -height => 500,-padding => "0 0 0 0");
@@ -581,7 +582,8 @@ sub main_script
 	$prg_String_search->g_grid(-column=>1,-row=>2,-padx=>5,-pady=>1,-sticky=>"w");
 	$frm_ppi_app->new_ttk__label(-text=>"Number of putative drug targets	:")->g_grid(-column=>0,-row=>3,-padx=>1,-pady=>1,-sticky=>"w");
 	my $entry_drug_cand_ppi_app=$frm_ppi_app->new_ttk__entry(-width=>5);
-	$entry_drug_cand_ppi_app->g_grid(-column=>1,-row=>3,-padx=>5,-pady=>1,-sticky=>"w");	
+	$entry_drug_cand_ppi_app->g_grid(-column=>1,-row=>3,-padx=>5,-pady=>1,-sticky=>"w");
+	$frm_ppi_app->new_ttk__label(-textvariable=>\$ppi_status)->g_grid(-column=>0,-row=>6,-padx=>1,-pady=>5,-sticky=>"e",-columnspan=>2);
 	###################panel widget END##########################	
 	
 	my $save_result = $frm_top->new_button(-text=>"Export putative target sequences",-width=>28, -state=>"disabled",-command=>sub{
@@ -774,8 +776,8 @@ sub main_script
 			
 			#sorting and mapping to accepted_seq_step-2.fasta ids; 10% $non_host_seq_id
 			Tkx::tk___messageBox(-type => "ok",
-					-message => "Calculating centrality measures\nWindows may freez for sometime. Please wait...\n",
-					-title => "Alert");
+					-message => "Shortest path calculation for all node pairs using Floyd-Warshall's algorithm may freez the GUI window. Please wait...\n",
+					-title => "Alert", -icon=>'warning');
 			Tkx::update();
 			
 			open (P,"$PPI_id_map_file") or die "$!";
@@ -820,7 +822,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			print S "sqlite3.exe $database <import.sql\n";
 			#print S "copy import.sql  mm.sql\n";
 			print S "del import.sql  \n";
-			print S "exit  \n";
+			print S "exit\n";
 			close S;
 			if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
 			else{system("start batch.bat ");}
@@ -835,44 +837,56 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			my $password = "";
 			my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 								  or die $DBI::errstr;
+			$ppi_status="importing IDs"; Tkx::update();	
+			my $c=0;
 			foreach my $i(@$not_host_like_proteins)
 			{				
 				my $p=$seq_id_to_PPI_id_map{$i};
 				#print "$i --> $p -\n";
 				next if !$p;
 				my $stmt = qq(INSERT INTO tmp (id) VALUES ('$p'););	
-				my $rv = $dbh->do($stmt) or die $DBI::errstr;			
+				my $rv = $dbh->do($stmt) or die $DBI::errstr;	
+				$ppi_status="importing IDs ".sprintf("%d/%d",$c++,scalar@$not_host_like_proteins); Tkx::update();	
 			}
 			
-			my $stmt = qq(select PPI.proteinA, PPI.proteinB, PPI.score from PPI INNER JOIN tmp where (tmp.id=PPI.proteinA) AND PPI.score >=$PPI_score_cutoff);	##LIMIT 1500
+			my $stmt = qq(SELECT PPI.proteinA, PPI.proteinB, PPI.score FROM PPI INNER JOIN tmp where (tmp.id=PPI.proteinA) AND PPI.score >=$PPI_score_cutoff);	##LIMIT 1500
+			my ($row_c) = $dbh->selectrow_array(qq(SELECT COUNT(*) FROM PPI INNER JOIN tmp where (tmp.id=PPI.proteinA) AND PPI.score >=$PPI_score_cutoff));
 					
 			my $sth = $dbh->prepare( $stmt );
 			my $rv = $sth->execute() or die $DBI::errstr;
-			if($rv < 0){
-					print $DBI::errstr;
-				}
+			if($rv < 0){print $DBI::errstr;	}
+			$c=0;
 			while(my @row = $sth->fetchrow_array()) {
-				$g->add_edge($row[0],$row[1]);			
+				$g->add_edge($row[0],$row[1]);
+				$ppi_status="adding nodes ".sprintf("%d/%d",$c++,$row_c); Tkx::update();	
 			}
+			$ppi_status="adding nodes $c/$row_c\n"; Tkx::update();
+			
 			$sth->finish(); $dbh->disconnect();
 		##Calculating nodes		
 			$string_srch_prg=40;Tkx::update();
+			$ppi_status="vertices calculation"; Tkx::update();
+			
 			my @V = $g->vertices;		## nodes in array
 			my $V = scalar @V;			##$g->vertices;		## network sizr (n)
-			my $gd = $g->diameter;		#diamemter
-			
-			open (K,">all_node.txt") or die "$!";
+			#$ppi_status="diameter calculation"; Tkx::update();
+			#print STDERR "$ppi_status\n";
+			#my $gd = $g->diameter;		#diamemter calculation taking a lot of time; so dropped
+			$ppi_status="Exporting nodes";Tkx::update();
+			open (K,">all_node.txt") or die "$! all_node.txt";
 			$"="\n";
 			print K "@V\n";
 			close K;
 			$"=" ";
 			sleep(2);
+			$ppi_status="shortest path calculation"; Tkx::update();
+			print STDERR "$ppi_status in progress. Please wait....\t";
 			my $apsp = $g->APSP_Floyd_Warshall();
-			Tkx::update();
+			Tkx::update();print STDERR "DONE\n";
 			#$prg_grph_cc->g_destroy();
 			#$mw->configure(-cursor=>"arrow");
 			#Return the all-pairs shortest path object computed from the graph using Floyd-Warshall's algorithm. The length of a path between two vertices is the sum of weight attribute of the edges along the shortest path between the two vertices. If no weight attribute name is specified explicitly the attribute weight is assumed.
-			
+			$ppi_status=""; Tkx::update();
 			$string_srch_prg=50;Tkx::update();
 			my %centrality_scores_per_node;
 			my %total_normalized_score_per_node;		##in a separate one as can be sorted easily
@@ -881,6 +895,8 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			my %node_componenet_index_tograph;			## keeps componenet idex as key and created undirected graph object as value;later updated to diameter of the object;just to save time at the cost of memory
 			
 ##Cytohubba
+			$c=0;
+			$ppi_status="Centrality calculation"; Tkx::update();
 			foreach my $node(@V)			#(@V)
 				{					
 					$centrality_scores_per_node{$node}={
@@ -1005,6 +1021,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 								
 				#printf "%s\t%d\t%f\t%f\t%f\t%d\t%d\n", $node,$centrality_scores_per_node{$node}->{degree},$centrality_scores_per_node{$node}->{radiality},$centrality_scores_per_node{$node}->{eccentricity},$centrality_scores_per_node{$node}->{closeness},$no_of_nodes_in_comonenet,$longest_shortest_path;				
 			Tkx::update();
+			$ppi_status="Centrality measure ".sprintf("%d/%d",$c++,$V); Tkx::update();
 			}
 			$dbh->disconnect();
 			$string_srch_prg=60;Tkx::update();
@@ -1025,7 +1042,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			
 			$string_srch_prg=70;Tkx::update();
 			my %non_host_seq_with_centrality_score;	##seq_id as key
-			
+			$ppi_status="Normalization"; Tkx::update();
 			foreach my $i(@$not_host_like_proteins)
 			{
 				my $ppi_id=$seq_id_to_PPI_id_map{$i};	#$non_host_seq_with_centrality_score{$i}=0;
@@ -1039,6 +1056,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			foreach my $u(sort {$non_host_seq_with_centrality_score{$b} <=> $non_host_seq_with_centrality_score{$a}} keys %non_host_seq_with_centrality_score){ 
 			push @sorted_filterd_ids, $u;
 			}
+			$ppi_status="Exporting results"; Tkx::update();
 			#print "\nsorted_filterd_ids:$#sorted_filterd_ids\n";
 			open (N,">$L_root_path/Centrality_measures.txt") or die "$!";			
 			print N "#No of nodes: $#V +1\n#Filtered ids: $#sorted_filterd_ids +1\n";
