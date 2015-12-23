@@ -102,21 +102,22 @@ my $EXEC_PATH = win_path($installation_path."/executables");
 $EXEC_PATH =~s/\"//g;
 $ENV{'PATH'}.=';'.$EXEC_PATH;
 
-if(!(-e "HideCmd.vbs")){ 
-	open (O, ">HideCmd.vbs") or die "$! HideCmd.vbs\n";
-	print O '
+## one may copy the directory to a new computer ; so rerun every time
+open (O, ">HideCmd.vbs") or die "$! HideCmd.vbs\n";
+print O '
 Set objShell = CreateObject("WScript.Shell") 
 Set objEnv = objShell.Environment("process")
+Set sysEnv = objShell.Environment("system")
  
 \'What we want to add
 PathToAdd = "'.$EXEC_PATH.'" 
 \'Set the new Path
-objEnv("PATH") = PathToAdd
+objEnv("PATH") = objEnv("PATH")&";"&PathToAdd
 \'Now get the bat file and run it without shownfg Command window
 objShell.Run """" & WScript.Arguments(0) & """", 0, False	
 ';
-	close O;
-}
+close O;
+
 
 
 if($blast_version eq 'old_blastall'){
@@ -1124,7 +1125,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			my $Eproteome=Tkx::tk___getOpenFile();
 			if(!((-e "$Eproteome\.phr")and(-e "$Eproteome\.psq")and(-e "$Eproteome\.pin"))){
 					Tkx::tk___messageBox(-type => "ok",
-					-message => "BLAST database (*.phr,*.psq, *.pin) not found for $Eproteome_file. Use formatdb.exe to create it ",
+					-message => "BLAST database (*.phr,*.psq, *.pin) not found for $Eproteome_file. Use formatdb/makeblastdb to create it ",
 					-icon => "error", -title => "Input file Error");
 				undef $Eproteome	;	
 				}
@@ -1540,6 +1541,8 @@ sub comp_known_DT
 				`echo $blast4 >> batch.bat`;
 				`echo rename $root_path\\drug_target_blast4.out drug_target_blast4.out.txt >> batch.bat`;	##mv works
 				`echo exit >> batch.bat`;
+				
+				
 				
 				if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
 				else{system("start batch.bat ");}
@@ -2355,9 +2358,9 @@ sub create_project
 			$crt_win->g_destroy;$mw->configure(-cursor=>"arrow");
 			my $batch;
 			if($Hproteome_file && !((-e "$Hproteome_file\.phr")and(-e "$Hproteome_file\.psq")and(-e "$Hproteome_file\.pin"))){
-			$batch="\"formatdb.exe\" -i \"$Hproteome_file\" -p T";
+			$batch="\"formatdb.exe\" -i \"$Hproteome_file\" -p T  for BLASTALL version\nuse makeblastdb for BLAST+";
 				Tkx::tk___messageBox(-type => "ok",
-					-message => "BLAST database (*.phr,*.psq, *.pin) not found for $Hproteome_file. Use formatdb.exe to create it ",
+					-message => "BLAST database (*.phr,*.psq, *.pin) not found for $Hproteome_file. Use formatdb.exe/makeblastdb.exe to create it ",
 					-icon => "error", -title => "Input file Error");
 					#$front_page_status.="\n=> BLAST database (*.phr,*.psq, *.pin) \nnot found for host proteome ";			
 			}
@@ -2925,7 +2928,8 @@ sub add_to_broad_spectrum_db
 			##tr|Q6FCC9|Q6FCC9_ACIAD format is fixed;  put exit if not met
 			
 			copy unix_path($fasta_dir."\\$l[1]"), "./local_dat/PATHOGENS/$l[1]";			
-			system ("formatdb.exe -p T -i $BLAST_DB_DIR\\$l[1]");
+			system ("formatdb.exe -p T -i .\\local_dat\\$BLAST_DB_DIR\\$l[1]") if $blast_version eq 'old_blastall';
+			system("makeblastdb.exe -dbtype prot -in .\\local_dat\\$BLAST_DB_DIR\\$l[1]") if ($blast_version eq 'blast+');
 			if (scalar @l <5) {warn "insufficient columns in line @l\nSkip.."; next;}
 			$l[5]=~s/'/`/g;
 		 my ($SuperKingdom,$phylum, $class, $order, $family, $genus) = split /;\s*/,$l[3];
@@ -3037,7 +3041,9 @@ sub add_a_drug_target_db
 		close F;
 		$drg_tar_prg=90;Tkx::update(); 
 		
-		system ("formatdb.exe -p T -i $BLAST_DB_DIR/$prefix\_drug_target_db.fasta");
+		system ("formatdb.exe -p T -i .\\local_dat\\$BLAST_DB_DIR/$prefix\_drug_target_db.fasta") if ($blast_version eq 'old_blastall');
+		system ("makeblastdb.exe -dbtype prot -in .\\local_dat\\$BLAST_DB_DIR\\$prefix\_drug_target_db.fasta") if ($blast_version eq 'blast+');
+		
 		
 		$drg_tar_prg=100;Tkx::update(); 
 		close_tool_window($crt_win,$mw);
@@ -3122,7 +3128,8 @@ sub add_ecoli_go_db
 		sleep 1;
 		my $fasta_file='./local_dat/GO/UP000000625_83333.fasta';
 		$status='BLAST setup'; Tkx::update();
-		system ("formatdb.exe -p T -i .\\local_dat\\GO\\UP000000625_83333.fasta");
+		system ("formatdb.exe -p T -i .\\local_dat\\GO\\UP000000625_83333.fasta") if ($blast_version eq 'old_blastall');
+		system ("makeblastdb.exe -dbtype prot -in .\\local_dat\\GO\\UP000000625_83333.fasta") if ($blast_version eq 'blast+');
 				
 		open (F,"<$fasta_file") or die "$! $fasta_file\n";
 		$status="Reading E.coli proteome";Tkx::update();
