@@ -723,19 +723,23 @@ sub main_script
 			write_fasta_seq($non_host_seq_id,"$L_root_path/accepted_seq_step-3.fasta");
 			my $r=fetch_seq_by_id($all_t_seq,$host_like_proteins);
 			write_fasta_seq($r,"$L_root_path/excluded_seq_step-3.fasta");
-			if (scalar @$not_host_like_proteins <2){Tkx::tk___messageBox(-message => "All input sequences have homologs in host proteome!!! ", -type=>"warning", -title=>"Warning"); exit(1);}
+			
 	}
 	else{
 			$blast_prg1=50;
 			system "copy $root_path\\accepted_seq_step-2.fasta $root_path\\accepted_seq_step-3.fasta"; 
 			$sequence_summary{-host_orthologs}=0;
+			my @ids = keys %{read_fasta_sequence("$L_root_path/accepted_seq_step-3.fasta")};
+			($host_like_proteins,$not_host_like_proteins)=([],\@ids);		
 			$blast_prg1=100;Tkx::update();	
 	}
 		
 	$entry_host_homolog_seq->delete(0, "end"); $entry_host_homolog_seq->insert(0, $sequence_summary{-host_orthologs}) ;
 	$entry_non_host_proteome->delete(0, "end"); $entry_non_host_proteome->insert(0, $sequence_summary{-total_seq}-($sequence_summary{-very_short_seq}+$sequence_summary{-paralogslogs}+$sequence_summary{-host_orthologs})) ;	
 	Tkx::update();	
-
+	if (scalar @$not_host_like_proteins <2){Tkx::tk___messageBox(-message => "All input sequences have homologs in host proteome!!! ", -type=>"warning", -title=>"Warning"); exit(1);}
+### Ask user if want to store result and terminate	
+	
 	Tkx::tk___messageBox(-message => "Select an target prediction approach\nPerform either 'Sequence-based approach'  or 'PPI network-based approach' ", -type=>"ok", -title=>"Alert");
 	
 ###do_PPI_search	
