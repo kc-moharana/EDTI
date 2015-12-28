@@ -864,7 +864,7 @@ CREATE TABLE PPI (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL, 
 			}
 			$ppi_status="adding nodes $c/$row_c\n"; Tkx::update();
 			
-			$sth->finish(); $dbh->disconnect();
+			$sth->finish();
 		##Calculating nodes		
 			$string_srch_prg=40;Tkx::update();
 			$ppi_status="vertices calculation"; Tkx::update();
@@ -1104,7 +1104,7 @@ CREATE TABLE tmp2 (proteinA VARCHAR(20) NOT NULL, proteinB VARCHAR(20) NOT NULL)
 			foreach my $seq_id(@filtered_id){
 				my $i = $g->connected_component_by_vertex($seq_id_to_PPI_id_map{$seq_id});	#return an index identifying the connected component the vertex belongs to
 				my @Connected_v = $g->connected_component_by_index($i); #For an undirected graph, return the vertices of the ith connected component, the indexing starting from zero. 
-				foreach (@Connected_v ) {print SIF "$seq_id\t$PPI_id_to_seq_id_map{$_}\n";}
+				foreach (@Connected_v ) {print SIF "$seq_id\tpp\t$PPI_id_to_seq_id_map{$_}\n";}
 			}
 			close SIF;
 
