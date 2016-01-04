@@ -346,38 +346,39 @@ if (Tkx::tk_windowingsystem() eq "aqua") {
 } 
 	
 #add menu items 
-$file->add_command(-label => "Create new Project",-underline=>1, -command =>\&create_project, -accelerator=>"Ctrl+n");
+$file->add_command(-label => "Create new Project",-underline=>7, -command =>\&create_project, -accelerator=>"Ctrl+n");
 $mw->g_bind("<Control-n>", sub{create_project()} );
 #$file->add_command(-label => "Open Project",-underline=>0, -command => sub {});	
 #$file->add_command(-label => "Save Project",-underline=>0, -command => sub {});	
 $file->add_command(-label => "Quit",-underline=>0, -accelerator=>"Alt+F4",-command => sub {system("del $root_path\\*.tmp"); exit(1);});
 
-$settings->add_command(-label => "Pipeline settings",-underline=>1, -accelerator=>"Ctrl+s",-command =>\&settings);
+$settings->add_command(-label => "Pipeline settings",-underline=>9, -accelerator=>"Ctrl+s",-command =>\&settings);
 $mw->g_bind("<Control-s>", sub{settings()} );
-$settings->add_command(-label => "Down-stream analysis",-underline=>1, -accelerator=>"Ctrl+d",-command =>\&down_str_anal);
+$settings->add_command(-label => "Down-stream analysis",-underline=>0, -accelerator=>"Ctrl+d",-command =>\&down_str_anal);
 $mw->g_bind("<Control-d>", sub{down_str_anal()} );
-$settings->add_command(-label => "Reset setting",-underline=>1, -accelerator=>"Ctrl+r",-command =>\&reset_params);
+$settings->add_command(-label => "Reset setting",-underline=>0, -accelerator=>"Ctrl+r",-command =>\&reset_params);
 $mw->g_bind("<Control-r>", sub{reset_params()} );
-$settings->add_command(-label => "System preferences",-underline=>1, -accelerator=>"Ctrl+e",-command =>\&sys_preferences);
+$settings->add_command(-label => "System preferences",-underline=>9, -accelerator=>"Ctrl+e",-command =>\&sys_preferences);
 $mw->g_bind("<Control-e>", sub{sys_preferences()} );
 
 
 
-$dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>1, -accelerator=>"Ctrl+b",-command =>sub {});	## functions updated later
-$dwn_str_anal->add_command(-label =>"Compare with known targets", -underline=>1, -accelerator=>"Ctrl+t",-command =>sub {});
-$dwn_str_anal->add_command(-label =>"GO analysis",-underline=>1, -accelerator=>"Ctrl+g",-command =>sub {});
-$dwn_str_anal->add_command(-label =>"Sub-cellular localization",-underline=>1, -accelerator=>"Ctrl+l",-command =>sub{});
+$dwn_str_anal->add_command(-label =>"Broadspectrum analysis", -underline=>0, -accelerator=>"Ctrl+b",-command =>sub {});	## functions updated later
+$dwn_str_anal->add_command(-label =>"Compare with known targets", -underline=>19, -accelerator=>"Ctrl+t",-command =>sub {});
+$dwn_str_anal->add_command(-label =>"GO analysis",-underline=>0, -accelerator=>"Ctrl+g",-command =>sub {});
+$dwn_str_anal->add_command(-label =>"Sub-cellular localization",-underline=>13, -accelerator=>"Ctrl+l",-command =>sub{});
     
 
-$utils->add_command(-label =>"Add pathogens for broadspectrum analysis", -underline=>5, -command =>\&add_to_broad_spectrum_db);
+$utils->add_command(-label =>"Add pathogens for broadspectrum analysis", -underline=>18, -command =>\&add_to_broad_spectrum_db);
 $utils->add_command(-label =>"Add a drug taerget  database", -underline=>6, -command =>\&add_a_drug_target_db);
-$utils->add_command(-label =>"Add Ontology database", -underline=>6, -command =>\&add_ecoli_go_db);
-$utils->add_command(-label =>"Create PPI mapping file", -underline=>6, -command =>\&util_PPI);
-$utils->add_command(-label =>"Fetch sequences by IDs", -underline=>6, -command =>\&tool_fetch_id_seq);
+$utils->add_command(-label =>"Add Ontology database", -underline=>4, -command =>\&add_ecoli_go_db);
+$utils->add_command(-label =>"Create PPI mapping file", -underline=>7, -command =>\&util_PPI);
+$utils->add_command(-label =>"Fetch sequences by IDs", -underline=>0, -command =>\&tool_fetch_id_seq);
+$utils->add_command(-label =>"Create BLAST database", -underline=>7, -command =>\&create_BLAST_db);
 
 
 
-$help->add_command(-label => "Manual",-underline=>0, -command =>\&manual);	
+$help->add_command(-label => "Manual",-underline=>0, -accelerator=>"F1", -command =>\&manual);	
 $help->add_command(-label => "About",-underline=>0, -command =>	\&about);
 $help->add_command(-label => "Citation",-underline=>0, -command =>	\&citation);
 
@@ -2781,6 +2782,64 @@ sub util_PPI
 	$PPI_blast -> g_grid(-column=>2,-row=>6,-padx=>0,-pady=>1,-columnspan=>2,-sticky=>"w");
 }
 
+##Creates pre-formated BLASTdb
+##Args:
+##Returns: 
+sub create_BLAST_db
+{
+	my $crt_win =$mw->new_toplevel();
+	$crt_win->g_wm_title("Utility:create BLAST db from a fasta file");
+	open_tool_window($crt_win,$mw);
+	my $frm1=$crt_win->new_ttk__frame(-borderwidth=>2,-relief=>'sunken',);
+	$frm1->g_grid(-row=>0,-column=>0,-sticky=>"nsew");	
+	my ($fasta_file,$mkblst);
+	$frm1->new_ttk__label(-text=>"Amino acid sequence file in FASTA format")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
+	$frm1 ->new_ttk__entry(-textvariable => \$fasta_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
+	
+	$frm1->new_ttk__button(-text=>"...",-width=>3,-command=>sub{
+	$fasta_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
+	if($fasta_file =~m/\s+/g){ undef $fasta_file;  Tkx::tk___messageBox(-message => "ERROR: BLAST DB contains space(s) in path.\nPlease change the spaces to Underscore", -type=>"ok", -title=>"Alert", -icon=>'warning',-parent=>$crt_win);}
+	#$total_seq_count =count_fasta_seq($fasta_file) if $fasta_file; 							
+	})->g_grid(-column=>3,-row=>1,-padx=>2,-pady=>1,-sticky=>"ns");
+
+	
+	$frm1->new_ttk__button(-text=>"Run",-width=>5,-command=>sub{
+	
+	if(-e "$fasta_file\.psq"){Tkx::tk___messageBox(-message => "Warning: BLAST DB already exists.", -type=>"ok", -title=>"Warning", -icon=>'info', -parent=>$crt_win); return (); }
+	if($blast_version eq 'blast+'){$mkblst ="makeblastdb -dbtype prot -in ".win_path($fasta_file);}
+	elsif($blast_version eq 'old_blastall'){ $mkblst="formatdb -p T -i ".win_path($fasta_file);}
+	else {die"Ambigugous blast_version $blast_version "}
+	
+	`echo echo off > batch.bat`;
+	`echo color B0 >> batch.bat`;
+	`echo cls >> batch.bat`;
+	`echo echo :: External program makeblastdb/formatdb.exe :: >> batch.bat`;
+	`echo echo ---------------------------------------------- >> batch.bat`;
+			
+	`echo echo 	Input		: $mkblst >> batch.bat`;
+	`echo $mkblst >> batch.bat`;			
+	`echo exit >> batch.bat`;
+			
+	if($cmd_hide){ system("wscript.exe HideCmd.vbs batch.bat ");}
+	else{system("start batch.bat ");}
+	
+	while(!(-e "$fasta_file\.psq")){  sleep(3)}
+	Tkx::tk___messageBox(-message => "Success: BLAST DB creatd", -type=>"ok", -title=>"Success", -icon=>'info', -parent=>$crt_win);
+	close_tool_window($crt_win,$mw);
+	})->g_grid(-column=>2,-row=>4,-padx=>2,-pady=>1,-sticky=>"ns");
+
+	
+	$frm1->new_ttk__button(-text=>"Close",-width=>8,-command=>sub{
+	close_tool_window($crt_win,$mw);
+	})->g_grid(-column=>3,-row=>4,-padx=>2,-pady=>5,-sticky=>"wn");
+}
+
+
+
+
+
+
+
 ##
 ##Args
 ##returns
@@ -2969,28 +3028,26 @@ sub add_a_drug_target_db
 	
 	my ($drug_targ_seq_file, $annot_file,$prefix);
 	$frm1->new_ttk__label(-text=>"Drug-target FASTA sequence file")->g_grid(-column=>0,-row=>0,-padx=>2,-pady=>5,-sticky=>"nw");
-	$frm1->new_ttk__label(-text=>"Drug-target annotation file")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
+	$frm1->new_ttk__label(-text=>"Drug-target annotation file \n(first column with FASTA header matching IDs)")->g_grid(-column=>0,-row=>1,-padx=>2,-pady=>5,-sticky=>"nw");
 	$frm1->new_ttk__label(-text=>"Drug-target Name")->g_grid(-column=>0,-row=>2,-padx=>2,-pady=>5,-sticky=>"nw");
 	
 	$frm1 ->new_ttk__entry(-textvariable => \$drug_targ_seq_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>0,-padx=>2,-pady=>1,-columnspan=>2);
-	$frm1 ->new_ttk__entry(-textvariable => \$annot_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>1,-columnspan=>2);
+	$frm1 ->new_ttk__entry(-textvariable => \$annot_file,-width=>40,-state=>"disabled",)->g_grid(-column=>1,-row=>1,-padx=>2,-pady=>0,-columnspan=>2);
 	$frm1 ->new_ttk__entry(-textvariable => \$prefix,-width=>30,)->g_grid(-column=>1,-row=>2,-padx=>2,-pady=>1,-columnspan=>2,-sticky=>"wn");
 	
 	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$drug_targ_seq_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
+	$drug_targ_seq_file = Tkx::tk___getOpenFile(-parent=>$crt_win);	
 	})->g_grid(-column=>4,-row=>0,-padx=>2,-pady=>1,-sticky=>"wn");
 	
 	$frm1->new_ttk__button(-text=>"...",-width=>5,-command=>sub{
-	$annot_file = Tkx::tk___getOpenFile(-parent=>$crt_win);
-	
-	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>1,-sticky=>"wn");
+	$annot_file = Tkx::tk___getOpenFile(-parent=>$crt_win);	
+	})->g_grid(-column=>4,-row=>1,-padx=>2,-pady=>8,-sticky=>"wn");
 	
 	my $drg_tar_prg=0; my $c=0;
 	my ($seq_count,$annots_count,$seq_no_annot,$annots_no_seq_data)=(0,0,0,0);
 	
 	my $run_but=$frm1->new_button(-text=>"Run",-width=>8, -command=>sub{
-			if ((!$drug_targ_seq_file || !$annot_file)|| !$prefix){ Tkx::tk___messageBox(-message => "ERROR: Input file missing", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_a_drug_target_db(); return 0;}
+		if ((!$drug_targ_seq_file || !$annot_file)|| !$prefix){ Tkx::tk___messageBox(-message => "ERROR: Input file missing", -type=>"ok", -title=>"Alert", -icon=>'warning');  $crt_win->g_destroy();	\&add_a_drug_target_db(); return 0;}
 	
 		my $BLAST_DB_DIR='KNOWN_DRUG_TARGETS';
 		my $database = 'drugTarget_db_names.txt';
@@ -3012,8 +3069,6 @@ sub add_a_drug_target_db
 			my @l=split /\t/,$l;
 			if($annot_seq_id{$l[0]}){ $annot_seq_id{$l[0]}=$l; push @annotations_with_seq_data,$l; }
 			else{$annots_no_seq_data++}
-
-
 		}
 		close A;	
 		$drg_tar_prg=20;Tkx::update(); 
@@ -3044,9 +3099,7 @@ sub add_a_drug_target_db
 		$drg_tar_prg=90;Tkx::update(); 
 		
 		system ("formatdb.exe -p T -i .\\local_dat\\$BLAST_DB_DIR/$prefix\_drug_target_db.fasta") if ($blast_version eq 'old_blastall');
-		system ("makeblastdb.exe -dbtype prot -in .\\local_dat\\$BLAST_DB_DIR\\$prefix\_drug_target_db.fasta") if ($blast_version eq 'blast+');
-		
-		
+		system ("makeblastdb.exe -dbtype prot -in .\\local_dat\\$BLAST_DB_DIR\\$prefix\_drug_target_db.fasta") if ($blast_version eq 'blast+');		
 		$drg_tar_prg=100;Tkx::update(); 
 		close_tool_window($crt_win,$mw);
 		
