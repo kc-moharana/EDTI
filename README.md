@@ -74,6 +74,7 @@ This analysis will help to compare and annotate the identified drug-targets with
 * Thr, Dec 17, 2015  07:34:12 PM : v.1.2.1 beta
 * Fri, Dec 18, 2015  04:52:12 PM : stable v.1.2.1b (beta); BLAST path contingin space not accepted;
 * Mon, Dec 21, 2015  11:54:12 AM : stable v.1.2.2b (beta); BLAST+ Supported;
+* Mon, Jan 04, 2016  01:31:16 PM : creating BLAST db for a FASTA sequence; Utility added;
 
 
 
