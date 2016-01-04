@@ -19,7 +19,10 @@ The tool needs Perl (www.perl.org) to be installed on your local computer. We re
 However, following modules are need to be installed additionally using Perl Package Manager (internet connection required).
 * Graph (To install open command prompt and type : <i>ppm install Graph</i>)
 
-Download and extract the ZIP source code github https://github.com/kanhu-pcr-code/EDTI/
+Download and extract the ZIP source code github https://github.com/kanhu-pcr-code/EDTI/archive/master.zip
+
+Extract the ZIP file. To start using double click on the latest version of the program. Please not that you need to install other softwares (BLAST, cd-hit, sqlite3, as described below) before start using the tool. 
+
 ### External softwares required
 * NCBI Blast+ (v. 2.2.20): blastall.exe <a href='ftp.ncbi.nlm.nih.gov/blast/executables/release/LATEST/' target='_blank'> Download </a>  (older versions of BLAST v2.2.18 can be used.)
 * CD-Hit (v.4.6 tested on MinGw-w64): cd-hit.exe  [See below for detailed stpes describing how to Compile on Windows]
@@ -27,7 +30,7 @@ Download and extract the ZIP source code github https://github.com/kanhu-pcr-cod
 
 * Sqlite (v. 3) : sqlite3.exe <a href='https://www.sqlite.org/download.html' target='_blank'>Download</a>
 * makeblastdb (v. 2.2.20): formatdb.exe  [install BLAST+]
-* 
+
 
 
 ####Complie cd-hit source into Win32 executable.
@@ -60,14 +63,14 @@ This analysis will help to compare and annotate the identified drug-targets with
 * First version stable: June 12, 2015
 * Wed, Dec 02, 2015  2:41:40 PM : Broadspectrum analysis, BLAST known target_databases added;
 * Fri, Dec 04, 2015  4:20:21 PM : File path problem solved; Param seting s for Downstream anal addedi;
-* Sat, Dec 05, 2015 9:29:32 PM : Broad spectrum analysis Settings; select pathogens based on taxonomy based selection;
+* Sat, Dec 05, 2015 9:29:32 PM  : Broad spectrum analysis Settings; select pathogens based on taxonomy based selection;
 * Mon, Dec 07, 2015 12:13:11 PM : few path issues corrected
 * Fri, Dec 11, 2015  4:22:00 PM : GO enrichment analysis added
 * Sat, Dec 12, 2015  12:30:03 AM : Utilities menu added;
 * Mon, Dec 14, 2015  10:45:00 PM : Sub-cellular localization;pSORT web-based added;
 * Tue, Dec 15, 2015  17:07:33 PM : GO enrich add datababase Utility;
 * Wed, Dec 16, 2015  02:11:53 AM : Executables in ENV PATH; NCBI tax id added; code fix update
-* Wed, Dec 16, 2015  07:11:01 PM : Major code fix; responsive Dialogs-box; broad spectrum cmd toolong fixed;near finish
+* Wed, Dec 16, 2015  07:11:01 PM : Major code fix; responsive Dialogs-box; broad-spectrum cmd too long fixed;near finish
 * Thr, Dec 17, 2015  07:34:12 PM : v.1.2.1 beta
 * Fri, Dec 18, 2015  04:52:12 PM : stable v.1.2.1b (beta); BLAST path contingin space not accepted;
 * Mon, Dec 21, 2015  11:54:12 AM : stable v.1.2.2b (beta); BLAST+ Supported;
