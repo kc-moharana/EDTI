@@ -50,16 +50,21 @@ our $PPI_id_map_file; 	## Sequence id mapped to STRING id
 our $interactome_file;	## Interaction file , atleast three columns,ProteinA-ProteinB-Score
 our ($skip_cdHit,$skip_host_BLAST)=(0,0);	## Trun on if want to skip steps
 our $taxon_id;			## NCBI taxon id; trash
-our $setup_error;		## Hold error messages if run for the first time;
-our $cmd_hide=1;	##System prefre, batch query run cmd; update by reading sys_conf_file
-our $wlc_msg_show=1;
-our $blast_version=(check_executable_on_PATH("blastp.exe -help")?'blast+':'old_blastall'); ##Auto detect
+
 
 our $project_name="New_Project";	
 our $root_path=	get_my_document_path();		#getcwd();##update later
 our $L_root_path = get_my_document_path('L');	## keeping an extra variable; storing path in Unix format
 our $installation_path=getcwd();			##dont update; essential data files and folders;
+##Making it on path
+my $EXEC_PATH = win_path($installation_path."/executables");
+$EXEC_PATH =~s/\"//g;
+$ENV{'PATH'}.=';'.$EXEC_PATH;
 
+our $setup_error;		## Hold error messages if run for the first time;
+our $cmd_hide=1;	##System prefre, batch query run cmd; update by reading sys_conf_file
+our $wlc_msg_show=1;
+our $blast_version=(check_executable_on_PATH("blastp.exe -help")?'blast+':'old_blastall'); ##Auto detect
 
 our $front_page_status="File > Create a new project. ";
 our $filter_param_settings_file;						#$root_path."/param.txt";
@@ -95,10 +100,7 @@ if(!(-e "local_dat/sys_conf")){ print STDERR "\tlocal_dat/sys_conf file not foun
 	close O;
 }
 
-##Making it on path
-my $EXEC_PATH = win_path($installation_path."/executables");
-$EXEC_PATH =~s/\"//g;
-$ENV{'PATH'}.=';'.$EXEC_PATH;
+
 
 ## one may copy the directory to a new computer ; so rerun every time
 open (O, ">HideCmd.vbs") or die "$! HideCmd.vbs\n";
